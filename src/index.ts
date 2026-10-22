@@ -9,6 +9,13 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import { usuarioActual } from './middlewares/usuarioActual';
+import { cuidadoresRouter } from './rutas/cuidadores';
+import { mascotasRouter } from './rutas/mascotas';
+import { registrosRouter } from './rutas/registros';
+import { reportesRouter } from './rutas/reportes';
+import { turnosRouter } from './rutas/turnos';
+import { usuariosRouter } from './rutas/usuarios';
 
 /** Puerto por defecto si el .env no define PORT. */
 const PUERTO_POR_DEFECTO = 3000;
@@ -31,6 +38,16 @@ app.use(express.json());
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
+
+// Todas las rutas de abajo necesitan saber quién pide (TODO Etapa 4: sesión real).
+app.use('/api', usuarioActual);
+
+app.use('/api/usuarios', usuariosRouter);
+app.use('/api/mascotas', mascotasRouter);
+app.use('/api/registros', registrosRouter);
+app.use('/api/turnos', turnosRouter);
+app.use('/api/reportes', reportesRouter);
+app.use('/api/cuidadores', cuidadoresRouter);
 
 // --- Servidor ---
 
