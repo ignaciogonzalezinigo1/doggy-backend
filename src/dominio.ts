@@ -31,6 +31,15 @@ export type RolMascota = (typeof ROLES_MASCOTA)[number];
 export const TIPOS_CUIDADOR = ['familia', 'clinica', 'paseador'] as const;
 export type TipoCuidador = (typeof TIPOS_CUIDADOR)[number];
 
+/** Radios de búsqueda que ofrece la app, en metros (`RADIOS_BUSQUEDA` de doggy/mobile/src/utils/mapa.ts). */
+export const RADIOS_BUSQUEDA = [200, 500, 1000, 2000] as const;
+
+/** Etiquetas que puede tener un reporte como máximo (`MAXIMO` de EtiquetasInput en la app). */
+export const MAXIMO_ETIQUETAS = 5;
+
+/** Días que dura un código de asignación. */
+export const DIAS_VIGENCIA_INVITACION = 7;
+
 /**
  * Indica si un valor recibido pertenece a una de las listas de arriba.
  * @param lista valores válidos, por ejemplo `ESTADOS_REPORTE`

@@ -24,3 +24,30 @@ export function responderErrorInterno(res: Response, error: unknown, contexto: s
   console.error(`Error en ${contexto}:`, error);
   res.status(STATUS_ERROR_INTERNO).json({ error: MENSAJE_ERROR_INTERNO });
 }
+
+/**
+ * Responde un error esperado (400, 403, 404, 409, 410) con `{ error }`.
+ * @param res respuesta de Express
+ * @param status status de la tabla del contrato
+ * @param mensaje mensaje para el usuario
+ */
+export function responderError(res: Response, status: number, mensaje: string): void {
+  res.status(status).json({ error: mensaje });
+}
+
+/** Códigos de error de Prisma que las rutas traducen a un status. */
+type CodigoPrisma =
+  /** Registro no encontrado en un update o delete → 404. */
+  | 'P2025'
+  /** Valor repetido en un campo único → 409. */
+  | 'P2002';
+
+/**
+ * Indica si un error es de Prisma con cierto código.
+ * @param error lo que se capturó en el catch
+ * @param codigo código de Prisma
+ * @returns true si coincide
+ */
+export function esErrorPrisma(error: unknown, codigo: CodigoPrisma): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === codigo;
+}
