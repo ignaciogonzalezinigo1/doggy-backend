@@ -1,0 +1,18 @@
+// Modelo de datos de Doggy.
+//
+// Los modelos tienen que coincidir con los tipos de
+// doggy/mobile/src/types/models.ts: ids numéricos, fechas que viajan como
+// string ISO y relaciones por id.
+//
+// Después de cambiar este archivo: `npm run db:init` (aplica el schema a la
+// base y regenera el cliente con `npx prisma generate`).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// La URL de la base está en prisma.config.ts (Prisma 7).
+datasource db {
+  provider = "sqlite"
+}
