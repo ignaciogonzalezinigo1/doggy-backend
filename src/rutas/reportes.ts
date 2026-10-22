@@ -1,27 +1,166 @@
 /**
  * Rutas de los reportes de perros perdidos y encontrados (mapa comunitario).
+ *
+ * Un reporte no se borra: al cerrarlo ("Ya apareció") se le pone la fecha en
+ * `cerradoEn` y deja de salir en el mapa, pero queda el historial.
  */
 
 import { Router } from 'express';
-import { responderErrorInterno } from '../lib/errores';
+import { leerCambiosReporte, leerReporteNuevo } from '../cuerpos/reporte';
+import { MENSAJE_MASCOTA_NO_EXISTE, MENSAJE_SIN_PERMISO_MASCOTA, rolEn } from '../lib/asignaciones';
+import { MENSAJE_ID_INVALIDO, parseId } from '../lib/entrada';
+import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
 import { prisma } from '../lib/prisma';
 import { aReporte, INCLUIR_ETIQUETAS } from '../respuestas';
 
 export const reportesRouter = Router();
 
+/** Filtro de los reportes activos (los que no se cerraron). */
+const ACTIVOS = { cerradoEn: null };
+
+const MENSAJE_REPORTE_NO_EXISTE = 'No encontramos el reporte.';
+const MENSAJE_SOLO_AUTOR = 'Solo quien publicó el reporte puede modificarlo.';
+const MENSAJE_REPORTE_CERRADO = 'Este reporte ya está cerrado.';
+const MENSAJE_YA_REPORTADA = 'Esta mascota ya tiene un reporte de pérdida activo.';
+
 /**
- * GET /api/reportes: todos los reportes activos, de cualquier usuario, con sus
- * etiquetas. Un reporte cerrado se borra (DELETE), así que los que están en la
- * base son los activos. Responde 200 con ReportePerdida[] o 500.
+ * Arma la escritura anidada que crea las etiquetas de un reporte nuevo.
+ * @param etiquetas textos de las etiquetas
+ * @returns el `etiquetas` del data de Prisma
+ */
+function crearEtiquetas(etiquetas: string[]) {
+  return { create: etiquetas.map((texto) => ({ texto })) };
+}
+
+/**
+ * Arma la escritura anidada que reemplaza todas las etiquetas de un reporte:
+ * borra las que tenía y crea las nuevas. Prisma la hace dentro de la misma
+ * transacción que el update.
+ * @param etiquetas textos nuevos
+ * @returns el `etiquetas` del data de Prisma
+ */
+function reemplazarEtiquetas(etiquetas: string[]) {
+  return { deleteMany: {}, ...crearEtiquetas(etiquetas) };
+}
+
+/**
+ * GET /api/reportes: todos los reportes activos (sin cerrar), de cualquier
+ * usuario, con sus etiquetas. Responde 200 con ReportePerdida[] o 500.
  */
 reportesRouter.get('/', async (_req, res) => {
   try {
     const reportes = await prisma.reportePerdida.findMany({
+      where: ACTIVOS,
       include: INCLUIR_ETIQUETAS,
       orderBy: { id: 'asc' },
     });
     res.json(reportes.map(aReporte));
   } catch (error) {
     responderErrorInterno(res, error, 'GET /api/reportes');
+  }
+});
+
+/**
+ * POST /api/reportes: publica un reporte. El autor es el usuario de la sesión.
+ * - perdido: de una mascota asignada al usuario, con radio de búsqueda; una
+ *   mascota tiene como mucho un reporte de pérdida activo.
+ * - encontrado: la mascota es opcional (la que identificó el QR, que puede
+ *   ser de otra persona).
+ * Body: estado, mascotaId, nombre, raza, descripcion, foto, etiquetas, lat,
+ * lng, zona, fecha (ISO), radioMetros (opcional), infoAdicional (opcional).
+ * Responde 201 con el ReportePerdida, 400 si un dato no es válido, 403 si
+ * reporta perdida una mascota que no tiene asignada, 404 si la mascota no
+ * existe, 409 si ya tiene un reporte de pérdida activo o 500.
+ */
+reportesRouter.post('/', async (req, res) => {
+  try {
+    const leido = leerReporteNuevo(req.body);
+    if (!leido.ok) {
+      responderError(res, 400, leido.error);
+      return;
+    }
+    const { etiquetas, ...datos } = leido.datos;
+    if (datos.mascotaId !== null) {
+      const mascota = await prisma.mascota.findUnique({ where: { id: datos.mascotaId } });
+      if (!mascota) {
+        responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+        return;
+      }
+    }
+    if (datos.estado === 'perdido' && datos.mascotaId !== null) {
+      if (!(await rolEn(datos.mascotaId, req.usuarioId))) {
+        responderError(res, 403, MENSAJE_SIN_PERMISO_MASCOTA);
+        return;
+      }
+      const activo = await prisma.reportePerdida.findFirst({
+        where: { ...ACTIVOS, mascotaId: datos.mascotaId, estado: 'perdido' },
+        select: { id: true },
+      });
+      if (activo) {
+        responderError(res, 409, MENSAJE_YA_REPORTADA);
+        return;
+      }
+    }
+    const reporte = await prisma.reportePerdida.create({
+      data: { ...datos, autorId: req.usuarioId, etiquetas: crearEtiquetas(etiquetas) },
+      include: INCLUIR_ETIQUETAS,
+    });
+    res.status(201).json(aReporte(reporte));
+  } catch (error) {
+    responderErrorInterno(res, error, 'POST /api/reportes');
+  }
+});
+
+/**
+ * PATCH /api/reportes/:id: modifica un reporte activo o lo cierra. Solo el autor.
+ * Body (todos opcionales): nombre, raza, descripcion, foto, etiquetas (si
+ * vienen, reemplazan todas), lat, lng, zona, fecha, radioMetros,
+ * infoAdicional (null la borra) y cerrado: true para cerrarlo ("Ya apareció").
+ * El estado y la mascota no se cambian.
+ * Responde 200 con el ReportePerdida, 400 si el id o un dato no es válido,
+ * 403 si no es el autor, 404 si no existe, 409 si ya estaba cerrado o 500.
+ */
+reportesRouter.patch('/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const actual = await prisma.reportePerdida.findUnique({ where: { id } });
+    if (!actual) {
+      responderError(res, 404, MENSAJE_REPORTE_NO_EXISTE);
+      return;
+    }
+    if (actual.autorId !== req.usuarioId) {
+      responderError(res, 403, MENSAJE_SOLO_AUTOR);
+      return;
+    }
+    if (actual.cerradoEn !== null) {
+      responderError(res, 409, MENSAJE_REPORTE_CERRADO);
+      return;
+    }
+    const leido = leerCambiosReporte(req.body, actual.estado);
+    if (!leido.ok) {
+      responderError(res, 400, leido.error);
+      return;
+    }
+    const { etiquetas, cerrado, ...cambios } = leido.datos;
+    const reporte = await prisma.reportePerdida.update({
+      where: { id },
+      data: {
+        ...cambios,
+        ...(etiquetas && { etiquetas: reemplazarEtiquetas(etiquetas) }),
+        ...(cerrado && { cerradoEn: new Date() }),
+      },
+      include: INCLUIR_ETIQUETAS,
+    });
+    res.json(aReporte(reporte));
+  } catch (error) {
+    if (esErrorPrisma(error, 'P2025')) {
+      responderError(res, 404, MENSAJE_REPORTE_NO_EXISTE);
+    } else {
+      responderErrorInterno(res, error, 'PATCH /api/reportes/:id');
+    }
   }
 });

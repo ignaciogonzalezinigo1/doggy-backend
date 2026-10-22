@@ -121,6 +121,9 @@ model ReportePerdida {
   /// Radio de búsqueda en metros; solo en reportes de mascotas propias.
   radioMetros   Int?
   infoAdicional String?
+  /// Cuándo se cerró ("Ya apareció"). Null mientras está activo. Los cerrados
+  /// no se borran, para guardar el historial, pero GET /api/reportes no los devuelve.
+  cerradoEn     DateTime?
 
   /// La API las devuelve como `etiquetas: string[]`.
   etiquetas Etiqueta[]
