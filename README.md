@@ -89,11 +89,41 @@ Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y ca
 
 ## Endpoints
 
-| Método | Ruta | Respuesta |
-| --- | --- | --- |
-| GET | `/api/health` | `200 { "ok": true }` |
+Por ahora todos los pedidos se atienden como Sofía (usuaria 1 del seed); el login llega en la Etapa 4. "Asignado" quiere decir que el usuario es dueño o invitado de esa mascota.
 
-Los errores llegan siempre como `{ "error": "mensaje en español" }`. El contrato completo con la app (endpoints previstos y códigos de estado) está en `CLAUDE.md`.
+| Método | Ruta | Body | Respuestas |
+| --- | --- | --- | --- |
+| GET | `/api/health` | — | 200 `{ "ok": true }` |
+| GET | `/api/usuarios/me` | — | 200 Usuario · 404 |
+| PATCH | `/api/usuarios/me` | `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia`, `foto` | 200 Usuario · 400 · 404 · 409 email de otra cuenta |
+| GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) |
+| POST | `/api/mascotas` | `nombre`, `raza`, `edad`, `senas`, `foto` | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 |
+| PATCH | `/api/mascotas/:id` | los mismos, opcionales (el código no cambia) | 200 Mascota · 400 · 403 · 404 |
+| GET | `/api/registros` | — | 200 RegistroSanitario[] |
+| POST | `/api/mascotas/:id/registros` | `tipo`, `nombre`, `fecha` (AAAA-MM-DD), `profesional`, `proximaDosis`, `fotoEtiqueta` | 201 RegistroSanitario · 400 · 403 · 404 |
+| PATCH | `/api/registros/:id` | los mismos, opcionales (`null` borra los opcionales) | 200 RegistroSanitario · 400 · 403 · 404 |
+| DELETE | `/api/registros/:id` | — | 204 · 400 · 403 · 404 |
+| GET | `/api/turnos` | — | 200 Turno[] |
+| POST | `/api/turnos` | `mascotaId`, `categoria`, `fecha` (ISO con hora, a futuro), `motivo`, `lugar` | 201 Turno · 400 · 403 · 404 |
+| PATCH | `/api/turnos/:id` | los mismos, opcionales ("a futuro" solo si cambia la fecha) | 200 Turno · 400 · 403 · 404 |
+| DELETE | `/api/turnos/:id` | — | 204 · 400 · 403 · 404 |
+| GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos) |
+| POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros`, `infoAdicional` | 201 ReportePerdida · 400 · 403 · 404 · 409 ya tiene uno de pérdida activo |
+| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 403 no es el autor · 404 · 409 ya cerrado |
+| GET | `/api/cuidadores` | — | 200 Cuidador[] |
+| DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 403 · 404 · 409 único dueño |
+| POST | `/api/mascotas/:id/invitaciones` | `rol` | 201 Invitacion (8 caracteres, vence a 7 días) · 400 · 403 no es dueño · 404 |
+| GET | `/api/invitaciones/:token` | — | 200 Invitacion · 400 · 404 · 410 usado o vencido |
+| POST | `/api/invitaciones/:token/aceptar` | — | 200 Cuidador · 400 · 404 · 409 ya asignado · 410 |
+
+Los errores llegan siempre como `{ "error": "mensaje en español" }` y cualquier ruta puede responder 500 si algo falla en el servidor. Los DELETE responden 204 sin body. Las reglas completas (permisos, validaciones y el contrato con la app) están en `CLAUDE.md`.
+
+Para probar a mano, por ejemplo:
+
+```bash
+curl -X POST http://localhost:3000/api/mascotas -H 'Content-Type: application/json' \
+  -d '{"nombre":"Pampa","raza":"Mestizo","edad":2,"senas":"Mancha blanca en el pecho"}'
+```
 
 ## Estructura
 
@@ -104,8 +134,13 @@ doggy-backend/
 │   └── seed.ts           datos de ejemplo
 ├── prisma.config.ts      configuración de la CLI de Prisma (URL de la base, seed)
 └── src/
-    ├── index.ts          app de Express y rutas
-    ├── dominio.ts        valores válidos de los campos fijos (roles, estados, categorías)
-    ├── lib/prisma.ts     cliente de Prisma con el adapter de SQLite
+    ├── index.ts          app de Express y montaje de las rutas
+    ├── rutas/            una por recurso (mascotas, registros, turnos, reportes, invitaciones…)
+    ├── cuerpos/          lectura y validación del body de cada recurso
+    ├── validaciones.ts   reglas de validación, las mismas que la app
+    ├── respuestas.ts     conversión de los modelos al JSON que espera la app
+    ├── dominio.ts        valores válidos de los campos fijos (roles, estados, categorías, radios)
+    ├── lib/              Prisma, permisos, lectura del request, errores y códigos generados
+    ├── middlewares/      usuario de la sesión (temporal hasta el login)
     └── generated/        cliente generado por Prisma (no se versiona)
 ```
