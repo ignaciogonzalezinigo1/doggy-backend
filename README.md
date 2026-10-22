@@ -44,6 +44,32 @@ carpeta-de-trabajo/
 └── doggy-backend/    este repo (la API)
 ```
 
+### Usuarios de prueba
+
+El seed carga los mismos datos que la app tiene de ejemplo (`doggy/mobile/src/data/mock.ts`), con los mismos ids. **Todos los usuarios tienen la contraseña `doggy1234`.**
+
+| Usuario | Email | Para qué sirve |
+| --- | --- | --- |
+| Sofía Romero | `sofia.romero@mail.com` | La usuaria principal de la demo: tutora de Luna, Roco y Milo |
+| Lucía Gómez | `lucia.gomez@mail.com` | Tutora de Toby; generó el código de asignación `TOBY2026` para Sofía |
+| Carlos Romero | `carlos.romero@mail.com` | Co-tutor (dueño) de Luna |
+| Sol Romero | `sol.romero@mail.com` | Dueña de Milo (hogar secundario) |
+| Marcos Díaz | `marcos.diaz@mail.com` | Paseador de Roco (invitado) |
+| Vet. San Roque | `contacto@vetsanroque.com` | Clínica asignada a Luna (invitada) |
+| Martín López | `martin.lopez@mail.com` | Autor del reporte de Simba (perdido) |
+| Valentina Pérez | `valentina.perez@mail.com` | Autora del reporte del perro encontrado en Belgrano |
+| Julián Fernández | `julian.fernandez@mail.com` | Autor del reporte de Nieve (perdida) |
+
+Las fechas de los reportes se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido; turnos, registros y la invitación tienen fechas fijas, como en la app.
+
+### Resetear la base
+
+```bash
+npm run db:reset
+```
+
+Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y carga el seed. Sirve para volver a la demo limpia o después de cambiar el schema de forma incompatible. Para recargar solo los datos sin tocar las tablas: `npm run db:seed` (borra los datos y los vuelve a cargar).
+
 ### Variables de entorno
 
 | Variable | Default | Para qué |
@@ -79,6 +105,7 @@ doggy-backend/
 ├── prisma.config.ts      configuración de la CLI de Prisma (URL de la base, seed)
 └── src/
     ├── index.ts          app de Express y rutas
+    ├── dominio.ts        valores válidos de los campos fijos (roles, estados, categorías)
     ├── lib/prisma.ts     cliente de Prisma con el adapter de SQLite
     └── generated/        cliente generado por Prisma (no se versiona)
 ```
