@@ -7,7 +7,9 @@
  * Borra todo antes de cargar, así se puede correr más de una vez.
  *
  * Las fechas de los reportes se calculan desde "ahora", como en el mock, para
- * que "hace 2 h" siempre tenga sentido. El resto son fechas fijas.
+ * que "hace 2 h" siempre tenga sentido. Las de los turnos se calculan desde
+ * hoy, así la demo de la Agenda siempre tiene uno pasado y varios próximos.
+ * Las del carnet son fijas.
  */
 
 import bcrypt from 'bcryptjs';
@@ -19,6 +21,8 @@ const PASSWORD_DEMO = 'doggy1234';
 const RONDAS_BCRYPT = 10;
 
 const HORA_MS = 60 * 60 * 1000;
+/** Diferencia de Argentina con UTC (no tiene horario de verano). */
+const DESFASE_ARGENTINA_MS = -3 * HORA_MS;
 
 /** Usuaria logueada en la demo. */
 const SOFIA_ID = 1;
@@ -32,6 +36,27 @@ const LUCIA_ID = 20;
  */
 function haceHoras(horas: number): Date {
   return new Date(Date.now() - horas * HORA_MS);
+}
+
+/**
+ * Fecha a cierta hora de Argentina, una cantidad de días desde hoy.
+ * Así los turnos de la demo no quedan viejos: se calculan cada vez que corre el seed.
+ * @param dias días desde hoy (negativo para el pasado)
+ * @param horas hora en Argentina (0 a 23)
+ * @param minutos minutos
+ * @returns la fecha y hora
+ */
+function enDias(dias: number, horas: number, minutos = 0): Date {
+  // Corrido al desfase, el día UTC de este Date es el día de hoy en Argentina.
+  const hoyEnArgentina = new Date(Date.now() + DESFASE_ARGENTINA_MS);
+  const enUtc = Date.UTC(
+    hoyEnArgentina.getUTCFullYear(),
+    hoyEnArgentina.getUTCMonth(),
+    hoyEnArgentina.getUTCDate() + dias,
+    horas,
+    minutos,
+  );
+  return new Date(enUtc - DESFASE_ARGENTINA_MS);
 }
 
 /**
@@ -246,7 +271,7 @@ const turnos = [
     id: 1,
     mascotaId: 3,
     categoria: 'peluqueria',
-    fecha: new Date('2026-10-09T15:00:00-03:00'),
+    fecha: enDias(-10, 15),
     motivo: 'Baño y corte de pelo',
     lugar: 'Peluquería Canina Patitas, Palermo',
   },
@@ -254,7 +279,7 @@ const turnos = [
     id: 2,
     mascotaId: 1,
     categoria: 'veterinario',
-    fecha: new Date('2026-10-23T10:30:00-03:00'),
+    fecha: enDias(3, 10, 30),
     motivo: 'Chequeo General Anual',
     lugar: 'Vet. San Roque, Palermo',
   },
@@ -262,7 +287,7 @@ const turnos = [
     id: 3,
     mascotaId: 2,
     categoria: 'vacunas',
-    fecha: new Date('2026-10-23T17:00:00-03:00'),
+    fecha: enDias(3, 17),
     motivo: 'Vacuna Séxtuple (Dosis 2)',
     lugar: 'Clínica Belgrano Pet',
   },
@@ -270,7 +295,7 @@ const turnos = [
     id: 4,
     mascotaId: 1,
     categoria: 'peluqueria',
-    fecha: new Date('2026-10-30T11:00:00-03:00'),
+    fecha: enDias(10, 11),
     motivo: 'Baño y deslanado',
     lugar: 'Peluquería Canina Patitas, Palermo',
   },
