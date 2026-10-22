@@ -11,6 +11,7 @@ import cors from 'cors';
 import express from 'express';
 import { usuarioActual } from './middlewares/usuarioActual';
 import { cuidadoresRouter } from './rutas/cuidadores';
+import { invitacionesRouter } from './rutas/invitaciones';
 import { mascotasRouter } from './rutas/mascotas';
 import { registrosRouter } from './rutas/registros';
 import { reportesRouter } from './rutas/reportes';
@@ -48,6 +49,7 @@ app.use('/api/registros', registrosRouter);
 app.use('/api/turnos', turnosRouter);
 app.use('/api/reportes', reportesRouter);
 app.use('/api/cuidadores', cuidadoresRouter);
+app.use('/api/invitaciones', invitacionesRouter);
 
 // --- Servidor ---
 

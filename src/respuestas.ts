@@ -2,9 +2,9 @@
  * Conversión de los modelos de Prisma al JSON que responde la API.
  *
  * Acá se aplica "Del modelo a la respuesta" del CLAUDE.md: etiquetas como
- * lista, nombre y foto del cuidador desde su usuario, fechas sin hora como
- * AAAA-MM-DD, opcionales omitidos si son null y nunca `passwordHash`. Las
- * rutas consultan con Prisma y pasan el resultado por estas funciones, tanto
+ * lista, nombre y foto del cuidador desde su usuario, la mascota de una
+ * invitación desde la relación, fechas sin hora como AAAA-MM-DD, opcionales
+ * omitidos si son null y nunca `passwordHash`. Las rutas consultan con Prisma y pasan el resultado por estas funciones, tanto
  * en los GET como en lo que devuelvan los POST y PATCH.
  */
 
@@ -19,6 +19,7 @@ import {
 import type {
   Cuidador,
   Etiqueta,
+  Invitacion,
   Mascota,
   RegistroSanitario,
   ReportePerdida,
@@ -27,6 +28,7 @@ import type {
 } from './generated/prisma/client';
 import type {
   CuidadorRespuesta,
+  InvitacionRespuesta,
   MascotaRespuesta,
   RegistroRespuesta,
   ReporteRespuesta,
@@ -47,6 +49,16 @@ export type ReporteConEtiquetas = ReportePerdida & { etiquetas: Etiqueta[] };
 export type CuidadorConUsuario = Cuidador & {
   usuario: Pick<Usuario, 'nombre' | 'apellido' | 'foto'>;
 };
+
+/** Invitación con los datos de su mascota (`include: INCLUIR_MASCOTA_INVITACION`). */
+export type InvitacionConMascota = Invitacion & {
+  mascota: Pick<Mascota, 'nombre' | 'raza' | 'foto'>;
+};
+
+/** Lo que hay que incluir al consultar invitaciones para poder pasarlas por `aInvitacion`. */
+export const INCLUIR_MASCOTA_INVITACION = {
+  mascota: { select: { nombre: true, raza: true, foto: true } },
+} as const;
 
 /** Lo que hay que incluir al consultar reportes para poder pasarlos por `aReporte`. */
 export const INCLUIR_ETIQUETAS = { etiquetas: { orderBy: { id: 'asc' } } } as const;
@@ -193,5 +205,23 @@ export function aCuidador(cuidador: CuidadorConUsuario): CuidadorRespuesta {
     detalle: cuidador.detalle,
     tipo: valorDe(TIPOS_CUIDADOR, cuidador.tipo, 'Cuidador.tipo'),
     foto,
+  };
+}
+
+/**
+ * Invitación con la fecha de vencimiento como ISO y los datos de la mascota.
+ * @param invitacion invitación leída con `INCLUIR_MASCOTA_INVITACION`
+ * @returns la invitación para responder
+ */
+export function aInvitacion(invitacion: InvitacionConMascota): InvitacionRespuesta {
+  const { nombre, raza, foto } = invitacion.mascota;
+  return {
+    token: invitacion.token,
+    mascotaId: invitacion.mascotaId,
+    rol: valorDe(ROLES_MASCOTA, invitacion.rol, 'Invitacion.rol'),
+    creadaPorId: invitacion.creadaPorId,
+    vence: invitacion.vence.toISOString(),
+    usada: invitacion.usada,
+    mascota: { nombre, raza, foto },
   };
 }

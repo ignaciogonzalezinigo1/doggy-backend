@@ -1,14 +1,35 @@
 /**
- * Rutas de las mascotas del usuario.
+ * Rutas de las mascotas del usuario, y de lo que se crea colgado de una
+ * mascota: registros del carnet, códigos de asignación y la desasignación
+ * del propio usuario.
  */
 
 import { Router } from 'express';
-import { mascotasAsignadasA } from '../lib/asignaciones';
-import { responderErrorInterno } from '../lib/errores';
+import { leerCambiosMascota, leerMascotaNueva } from '../cuerpos/mascota';
+import { leerRegistroNuevo } from '../cuerpos/registro';
+import { DIAS_VIGENCIA_INVITACION, esValorDe, ROLES_MASCOTA } from '../dominio';
+import {
+  chequearMascota,
+  MENSAJE_MASCOTA_NO_EXISTE,
+  MENSAJE_SIN_PERMISO_MASCOTA,
+  mascotasAsignadasA,
+  rolEn,
+} from '../lib/asignaciones';
+import { generarCodigoMascota, generarToken } from '../lib/codigos';
+import { DatoInvalido, leerCuerpo, MENSAJE_ID_INVALIDO, parseId, pick } from '../lib/entrada';
+import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
 import { prisma } from '../lib/prisma';
-import { aMascota } from '../respuestas';
+import { aInvitacion, aMascota, aRegistro, INCLUIR_MASCOTA_INVITACION } from '../respuestas';
 
 export const mascotasRouter = Router();
+
+/** Cómo queda asignado quien da de alta una mascota (igual que `asignarCreador` en la app). */
+const ASIGNACION_CREADOR = { rol: 'dueno', detalle: 'Tutor/a', tipo: 'familia' } as const;
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+const MENSAJE_NO_ASIGNADO = 'No estás asignado a esta mascota.';
+const MENSAJE_UNICO_DUENO = 'Sos el único dueño. Asigná a otra persona como dueña antes de irte.';
 
 /**
  * GET /api/mascotas: mascotas a las que está asignado el usuario (como dueño o
@@ -23,5 +44,197 @@ mascotasRouter.get('/', async (req, res) => {
     res.json(mascotas.map(aMascota));
   } catch (error) {
     responderErrorInterno(res, error, 'GET /api/mascotas');
+  }
+});
+
+/**
+ * POST /api/mascotas: da de alta una mascota. El servidor le genera el código
+ * único del QR (DOGGY-XXXX-NOMBRE) y, en la misma transacción, asigna al
+ * usuario como dueño.
+ * Body: nombre, raza, edad, senas, foto (opcional).
+ * Responde 201 con la Mascota, 400 si un dato no es válido o 500.
+ */
+mascotasRouter.post('/', async (req, res) => {
+  try {
+    const datos = leerMascotaNueva(req.body);
+    if (!datos.ok) {
+      responderError(res, 400, datos.error);
+      return;
+    }
+    const codigo = await generarCodigoMascota(datos.datos.nombre);
+    const mascota = await prisma.$transaction(async (tx) => {
+      const creada = await tx.mascota.create({
+        data: { ...datos.datos, codigo, tutorId: req.usuarioId },
+      });
+      await tx.cuidador.create({
+        data: { ...ASIGNACION_CREADOR, mascotaId: creada.id, usuarioId: req.usuarioId },
+      });
+      return creada;
+    });
+    res.status(201).json(aMascota(mascota));
+  } catch (error) {
+    responderErrorInterno(res, error, 'POST /api/mascotas');
+  }
+});
+
+/**
+ * PATCH /api/mascotas/:id: cambia datos de una mascota asignada al usuario.
+ * El código del QR no cambia aunque cambie el nombre (ya está impreso en la chapita).
+ * Body (todos opcionales): nombre, raza, edad, senas, foto (null la borra).
+ * Responde 200 con la Mascota, 400 si el id o un dato no es válido, 403 si
+ * no está asignado, 404 si no existe o 500.
+ */
+mascotasRouter.patch('/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const permiso = await chequearMascota(id, req.usuarioId);
+    if (permiso) {
+      responderError(res, permiso.status, permiso.error);
+      return;
+    }
+    const cambios = leerCambiosMascota(req.body);
+    if (!cambios.ok) {
+      responderError(res, 400, cambios.error);
+      return;
+    }
+    const mascota = await prisma.mascota.update({ where: { id }, data: cambios.datos });
+    res.json(aMascota(mascota));
+  } catch (error) {
+    if (esErrorPrisma(error, 'P2025')) {
+      responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+    } else {
+      responderErrorInterno(res, error, 'PATCH /api/mascotas/:id');
+    }
+  }
+});
+
+/**
+ * POST /api/mascotas/:id/registros: agrega un registro al carnet de la mascota.
+ * Body: tipo, nombre, fecha (AAAA-MM-DD), profesional, proximaDosis
+ * (AAAA-MM-DD, opcional), fotoEtiqueta (opcional, solo vacunas). El
+ * `mascotaId` sale de la URL.
+ * Responde 201 con el RegistroSanitario, 400 si el id o un dato no es
+ * válido, 403 si no está asignado, 404 si la mascota no existe o 500.
+ */
+mascotasRouter.post('/:id/registros', async (req, res) => {
+  const mascotaId = parseId(req.params.id);
+  if (mascotaId === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const permiso = await chequearMascota(mascotaId, req.usuarioId);
+    if (permiso) {
+      responderError(res, permiso.status, permiso.error);
+      return;
+    }
+    const datos = leerRegistroNuevo(req.body);
+    if (!datos.ok) {
+      responderError(res, 400, datos.error);
+      return;
+    }
+    const registro = await prisma.registroSanitario.create({ data: { ...datos.datos, mascotaId } });
+    res.status(201).json(aRegistro(registro));
+  } catch (error) {
+    responderErrorInterno(res, error, 'POST /api/mascotas/:id/registros');
+  }
+});
+
+/**
+ * POST /api/mascotas/:id/invitaciones: genera un código de asignación de 8
+ * caracteres que vence a los 7 días. Solo lo puede hacer un dueño.
+ * Body: rol ('dueno' o 'invitado'), el rol con que queda quien lo acepte.
+ * Responde 201 con la Invitacion, 400 si el id o el rol no es válido, 403 si
+ * no es dueño, 404 si la mascota no existe o 500.
+ */
+mascotasRouter.post('/:id/invitaciones', async (req, res) => {
+  const mascotaId = parseId(req.params.id);
+  if (mascotaId === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const mascota = await prisma.mascota.findUnique({ where: { id: mascotaId } });
+    if (!mascota) {
+      responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+      return;
+    }
+    const rolPropio = await rolEn(mascotaId, req.usuarioId);
+    if (rolPropio !== 'dueno') {
+      const mensaje = rolPropio
+        ? `Solo un dueño de ${mascota.nombre} puede asignar a otras personas.`
+        : MENSAJE_SIN_PERMISO_MASCOTA;
+      responderError(res, 403, mensaje);
+      return;
+    }
+    const rol = leerCuerpo(() => {
+      const { rol: valor } = pick(req.body, ['rol']);
+      if (!esValorDe(ROLES_MASCOTA, valor)) throw new DatoInvalido('Elegí el rol de la persona.');
+      return valor;
+    });
+    if (!rol.ok) {
+      responderError(res, 400, rol.error);
+      return;
+    }
+    const invitacion = await prisma.invitacion.create({
+      data: {
+        token: await generarToken(),
+        mascotaId,
+        rol: rol.datos,
+        creadaPorId: req.usuarioId,
+        vence: new Date(Date.now() + DIAS_VIGENCIA_INVITACION * DIA_MS),
+      },
+      include: INCLUIR_MASCOTA_INVITACION,
+    });
+    res.status(201).json(aInvitacion(invitacion));
+  } catch (error) {
+    responderErrorInterno(res, error, 'POST /api/mascotas/:id/invitaciones');
+  }
+});
+
+/**
+ * DELETE /api/mascotas/:id/cuidadores/me: desasigna al usuario de la mascota.
+ * El último dueño no se puede ir: la mascota no puede quedar sin nadie que la
+ * administre. El chequeo y el borrado van en una transacción.
+ * Responde 204 sin body, 400 si el id no es válido, 403 si no está asignado,
+ * 404 si la mascota no existe, 409 si es el único dueño o 500.
+ */
+mascotasRouter.delete('/:id/cuidadores/me', async (req, res) => {
+  const mascotaId = parseId(req.params.id);
+  if (mascotaId === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const mascota = await prisma.mascota.findUnique({ where: { id: mascotaId }, select: { id: true } });
+    if (!mascota) {
+      responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+      return;
+    }
+    const resultado = await prisma.$transaction(async (tx) => {
+      const rol = await rolEn(mascotaId, req.usuarioId, tx);
+      if (!rol) return 'no-asignado';
+      if (rol === 'dueno') {
+        const duenos = await tx.cuidador.count({ where: { mascotaId, rol: 'dueno' } });
+        if (duenos === 1) return 'unico-dueno';
+      }
+      await tx.cuidador.delete({
+        where: { mascotaId_usuarioId: { mascotaId, usuarioId: req.usuarioId } },
+      });
+      return 'desasignado';
+    });
+    if (resultado === 'no-asignado') {
+      responderError(res, 403, MENSAJE_NO_ASIGNADO);
+    } else if (resultado === 'unico-dueno') {
+      responderError(res, 409, MENSAJE_UNICO_DUENO);
+    } else {
+      res.status(204).end();
+    }
+  } catch (error) {
+    responderErrorInterno(res, error, 'DELETE /api/mascotas/:id/cuidadores/me');
   }
 });

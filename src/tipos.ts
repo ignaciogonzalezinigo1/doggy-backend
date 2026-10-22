@@ -90,3 +90,14 @@ export type CuidadorRespuesta = {
   tipo: TipoCuidador;
   foto: string | null;
 };
+
+/** Código de asignación, con los datos de la mascota para mostrarlo antes de aceptarlo. */
+export type InvitacionRespuesta = {
+  token: string;
+  mascotaId: number;
+  rol: RolMascota;
+  creadaPorId: number;
+  vence: string;
+  usada: boolean;
+  mascota: Pick<MascotaRespuesta, 'nombre' | 'raza' | 'foto'>;
+};
