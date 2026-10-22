@@ -1,8 +1,12 @@
 // Modelo de datos de Doggy.
 //
 // Los modelos tienen que coincidir con los tipos de
-// doggy/mobile/src/types/models.ts: ids numéricos, fechas que viajan como
-// string ISO y relaciones por id.
+// doggy/mobile/src/types/models.ts: mismos nombres de modelos y campos, ids
+// numéricos y relaciones por id. Las fechas son DateTime y viajan como string ISO.
+//
+// Los campos de valores fijos (tipo, categoria, estado, rol) son String: SQLite
+// no hace cumplir los enums, así que las listas válidas están en src/dominio.ts
+// y se validan en Express.
 //
 // Después de cambiar este archivo: `npm run db:init` (aplica el schema a la
 // base y regenera el cliente con `npx prisma generate`).
@@ -15,4 +19,149 @@ generator client {
 // La URL de la base está en prisma.config.ts (Prisma 7).
 datasource db {
   provider = "sqlite"
+}
+
+/// Usuario dueño de la cuenta (tutor de las mascotas).
+model Usuario {
+  id                 Int      @id @default(autoincrement())
+  nombre             String
+  apellido           String
+  email              String   @unique
+  /// Barrio y ciudad, por ejemplo "Palermo, Buenos Aires".
+  ubicacion          String
+  /// Clave de foto local o URI remota.
+  foto               String?
+  telefonoEmergencia String
+  /// Hash bcrypt de la contraseña. Nunca se devuelve en la API.
+  passwordHash       String
+  createdAt          DateTime @default(now())
+
+  /// Mascotas que dio de alta (Mascota.tutorId).
+  mascotas     Mascota[]
+  /// Asignaciones a mascotas, propias o de otros.
+  cuidados     Cuidador[]
+  reportes     ReportePerdida[]
+  /// Códigos de asignación que generó.
+  invitaciones Invitacion[]
+}
+
+/// Perro registrado por un usuario (Doggy es solo para perros).
+model Mascota {
+  id      Int     @id @default(autoincrement())
+  /// Usuario que la dio de alta. No se puede borrar mientras sea tutor de una mascota.
+  tutorId Int
+  tutor   Usuario @relation(fields: [tutorId], references: [id])
+  nombre  String
+  raza    String
+  /// Edad en años.
+  edad    Int
+  /// ID único que se codifica en el QR de la chapita: DOGGY-XXXX-NOMBRE.
+  codigo  String  @unique
+  /// Señas particulares para reconocerla.
+  senas   String
+  foto    String?
+
+  registros    RegistroSanitario[]
+  turnos       Turno[]
+  cuidadores   Cuidador[]
+  reportes     ReportePerdida[]
+  invitaciones Invitacion[]
+}
+
+/// Entrada del carnet sanitario: siempre una aplicación ya hecha.
+model RegistroSanitario {
+  id           Int       @id @default(autoincrement())
+  mascotaId    Int
+  mascota      Mascota   @relation(fields: [mascotaId], references: [id], onDelete: Cascade)
+  /// Uno de TIPOS_REGISTRO.
+  tipo         String
+  nombre       String
+  /// Fecha de aplicación, sin hora (medianoche UTC; se devuelve como AAAA-MM-DD).
+  fecha        DateTime
+  profesional  String
+  /// Fecha del próximo refuerzo, sin hora, si el veterinario la indicó.
+  proximaDosis DateTime?
+  /// Foto de la etiqueta de la vacuna, como constancia.
+  fotoEtiqueta String?
+}
+
+/// Turno agendado para una mascota.
+model Turno {
+  id        Int      @id @default(autoincrement())
+  mascotaId Int
+  mascota   Mascota  @relation(fields: [mascotaId], references: [id], onDelete: Cascade)
+  /// Una de CATEGORIAS_TURNO.
+  categoria String
+  /// Fecha y hora del turno.
+  fecha     DateTime
+  motivo    String
+  lugar     String
+}
+
+/// Reporte de un perro perdido o encontrado en la vía pública.
+model ReportePerdida {
+  id            Int        @id @default(autoincrement())
+  /// Mascota registrada, o null si la reportó alguien que la encontró.
+  mascotaId     Int?
+  mascota       Mascota?   @relation(fields: [mascotaId], references: [id], onDelete: SetNull)
+  autorId       Int
+  autor         Usuario    @relation(fields: [autorId], references: [id])
+  /// Uno de ESTADOS_REPORTE.
+  estado        String
+  nombre        String
+  raza          String
+  descripcion   String
+  foto          String?
+  lat           Float
+  lng           Float
+  /// Zona legible, por ejemplo "Palermo, CABA".
+  zona          String
+  /// Momento en que se perdió o se encontró.
+  fecha         DateTime
+  /// Radio de búsqueda en metros; solo en reportes de mascotas propias.
+  radioMetros   Int?
+  infoAdicional String?
+
+  /// La API las devuelve como `etiquetas: string[]`.
+  etiquetas Etiqueta[]
+}
+
+/// Etiqueta libre de un reporte ("Collar rojo"). Tabla aparte porque SQLite no guarda listas.
+model Etiqueta {
+  id        Int            @id @default(autoincrement())
+  reporteId Int
+  reporte   ReportePerdida @relation(fields: [reporteId], references: [id], onDelete: Cascade)
+  texto     String
+}
+
+/// Asignación de una persona a una mascota (tabla intermedia Usuario–Mascota).
+/// El nombre y la foto que devuelve la API salen del Usuario relacionado.
+model Cuidador {
+  id        Int     @id @default(autoincrement())
+  mascotaId Int
+  mascota   Mascota @relation(fields: [mascotaId], references: [id], onDelete: Cascade)
+  usuarioId Int
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  /// Uno de ROLES_MASCOTA.
+  rol       String
+  /// Detalle del vínculo: "Hogar secundario", "Paseos de lunes a viernes".
+  detalle   String
+  /// Uno de TIPOS_CUIDADOR.
+  tipo      String
+
+  @@unique([mascotaId, usuarioId])
+}
+
+/// Código de asignación de una mascota: lo genera un dueño, sirve para una persona y vence.
+model Invitacion {
+  token       String   @id
+  mascotaId   Int
+  mascota     Mascota  @relation(fields: [mascotaId], references: [id], onDelete: Cascade)
+  /// Uno de ROLES_MASCOTA: el rol con el que queda quien lo acepta.
+  rol         String
+  /// Dueño que generó el código.
+  creadaPorId Int
+  creadaPor   Usuario  @relation(fields: [creadaPorId], references: [id], onDelete: Cascade)
+  vence       DateTime
+  usada       Boolean  @default(false)
 }
