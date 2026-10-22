@@ -1,0 +1,17 @@
+# Dependencias
+node_modules/
+
+# Entorno (se versiona .env.example)
+.env
+
+# Base SQLite local
+*.db
+*.db-journal
+
+# Cliente de Prisma generado (npx prisma generate)
+src/generated/
+
+# Herramientas y sistema
+.claude/
+.DS_Store
+*.log
