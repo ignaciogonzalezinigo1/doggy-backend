@@ -9,7 +9,8 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
-import { usuarioActual } from './middlewares/usuarioActual';
+import { requiereUsuario } from './middlewares/requiereUsuario';
+import { authRouter } from './rutas/auth';
 import { cuidadoresRouter } from './rutas/cuidadores';
 import { invitacionesRouter } from './rutas/invitaciones';
 import { mascotasRouter } from './rutas/mascotas';
@@ -40,8 +41,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// Todas las rutas de abajo necesitan saber quién pide (TODO Etapa 4: sesión real).
-app.use('/api', usuarioActual);
+// Registro y login son públicos; logout pide sesión adentro del router.
+app.use('/api/auth', authRouter);
+
+// Todas las rutas de abajo exigen `Authorization: Bearer <token>` (401 si no).
+app.use('/api', requiereUsuario);
 
 app.use('/api/usuarios', usuariosRouter);
 app.use('/api/mascotas', mascotasRouter);
