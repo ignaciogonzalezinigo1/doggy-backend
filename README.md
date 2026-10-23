@@ -90,11 +90,31 @@ Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y ca
 
 ## Endpoints
 
-Por ahora todos los pedidos se atienden como Sofía (usuaria 1 del seed); el login llega en la Etapa 4. "Asignado" quiere decir que el usuario es dueño o invitado de esa mascota.
+### Sesión
+
+Registro y login devuelven `{ "usuario": Usuario, "token": "..." }`. Todas las demás rutas (salvo `/api/health`) piden ese token en el header:
+
+```
+Authorization: Bearer <token>
+```
+
+Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado con el logout, responden **401** y la app vuelve al login. El token es aleatorio y el servidor guarda solo su hash en la tabla `Sesion`; el logout borra esa fila.
 
 | Método | Ruta | Body | Respuestas |
 | --- | --- | --- | --- |
-| GET | `/api/health` | — | 200 `{ "ok": true }` |
+| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `password` | 201 `{ usuario, token }` · 400 · 409 email ya registrado |
+| POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" |
+| POST | `/api/auth/logout` | — (con el header) | 204 · 401 |
+
+La contraseña nueva tiene de 8 a 64 caracteres, sin espacios, con al menos una letra y un número; nombre y apellido, solo letras. El email se guarda en minúsculas. La cuenta nueva queda con `ubicacion` y `telefonoEmergencia` vacíos, para completar desde Editar perfil (`PATCH /api/usuarios/me`).
+
+### Recursos
+
+Todas piden `Authorization: Bearer <token>` y pueden responder 401. "Asignado" quiere decir que el usuario de la sesión es dueño o invitado de esa mascota.
+
+| Método | Ruta | Body | Respuestas |
+| --- | --- | --- | --- |
+| GET | `/api/health` | — (pública) | 200 `{ "ok": true }` |
 | GET | `/api/usuarios/me` | — | 200 Usuario · 404 |
 | PATCH | `/api/usuarios/me` | `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia`, `foto` | 200 Usuario · 400 · 404 · 409 email de otra cuenta |
 | GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) |
@@ -119,10 +139,14 @@ Por ahora todos los pedidos se atienden como Sofía (usuaria 1 del seed); el log
 
 Los errores llegan siempre como `{ "error": "mensaje en español" }` y cualquier ruta puede responder 500 si algo falla en el servidor. Los DELETE responden 204 sin body. Las reglas completas (permisos, validaciones y el contrato con la app) están en `CLAUDE.md`.
 
-Para probar a mano, por ejemplo:
+Para probar a mano, primero hacé login y después usá el token:
 
 ```bash
+curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"sofia.romero@mail.com","password":"doggy1234"}'
+
 curl -X POST http://localhost:3000/api/mascotas -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <token>' \
   -d '{"nombre":"Pampa","raza":"Mestizo","edad":2,"senas":"Mancha blanca en el pecho"}'
 ```
 
@@ -136,11 +160,12 @@ Corre `scripts/probar.sh`, que prueba la API con `curl`:
 
 1. Resetea su propia base, `test.db`, con `npm run db:reset` (la borra, la vuelve a crear y carga los datos del seed). El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. `test.db` está ignorada en git, como todas las `*.db`.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre).
-3. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido de algunas respuestas (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.).
-4. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
-5. Baja el servidor al terminar.
+3. Hace login con Sofía, Lucía y Carlos (contraseña `doggy1234`) y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
+4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido de algunas respuestas (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.).
+5. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
+6. Baja el servidor al terminar.
 
-Necesita `curl` y `sqlite3` (vienen con macOS), el `.env` y las dependencias instaladas. Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, un código de asignación vencido o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`, y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`.
+Necesita `curl` y `sqlite3` (vienen con macOS), el `.env` y las dependencias instaladas. Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, un código de asignación vencido o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`.
 
 ## Estructura
 
@@ -159,7 +184,7 @@ doggy-backend/
     ├── validaciones.ts   reglas de validación, las mismas que la app
     ├── respuestas.ts     conversión de los modelos al JSON que espera la app
     ├── dominio.ts        valores válidos de los campos fijos (roles, estados, categorías, radios)
-    ├── lib/              Prisma, permisos, lectura del request, errores y códigos generados
-    ├── middlewares/      usuario de la sesión (temporal hasta el login)
+    ├── lib/              Prisma, sesiones, permisos, lectura del request, errores y códigos generados
+    ├── middlewares/      requiereUsuario: lee el token y pone el usuario de la sesión (401 si no hay)
     └── generated/        cliente generado por Prisma (no se versiona)
 ```

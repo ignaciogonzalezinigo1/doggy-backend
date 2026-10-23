@@ -27,7 +27,7 @@ Lo que sigue lo tienen que respetar los dos repos. **Si algo del contrato cambia
 
 | Recurso | Endpoints |
 | --- | --- |
-| Auth | `POST /api/auth/login`, `POST /api/auth/logout` |
+| Auth | `POST /api/auth/registro`, `POST /api/auth/login`, `POST /api/auth/logout` |
 | Usuario | `GET /api/usuarios/me`, `PATCH /api/usuarios/me` |
 | Mascotas | `GET /api/mascotas`, `POST /api/mascotas`, `PATCH /api/mascotas/:id` |
 | Registros | `GET /api/registros`, `POST /api/mascotas/:id/registros`, `PATCH /api/registros/:id`, `DELETE /api/registros/:id` |
@@ -47,6 +47,15 @@ Además, `GET /api/health` → `{ ok: true }` para chequear que el servidor est�
 - **Permisos:** solo se escribe sobre mascotas a las que el usuario está asignado, como dueño o invitado (403 si no). Generar códigos de asignación es solo para dueños. Excepción: un reporte `encontrado` puede llevar el `mascotaId` de una mascota ajena (la que identificó el QR); solo se chequea que exista.
 - Una mascota tiene como mucho un reporte `perdido` activo (409 si ya tiene uno).
 
+### Sesión
+
+- `POST /api/auth/registro` `{ nombre, apellido, email, password }` → 201 `{ usuario, token }`; 400 si un dato no es válido (mismas reglas que la pantalla de registro), 409 si el email ya tiene cuenta. El email se guarda en minúsculas. `ubicacion` y `telefonoEmergencia` quedan como `""` hasta que el usuario los complete con `PATCH /api/usuarios/me`.
+- `POST /api/auth/login` `{ email, password }` → 200 `{ usuario, token }`; 401 con `"Email o contraseña incorrectos"`, el mismo mensaje si el email no existe o si la contraseña no coincide.
+- `POST /api/auth/logout` → 204 sin body; desde ahí ese token responde 401.
+- **Todas las demás rutas mandan `Authorization: Bearer <token>`**, salvo `/api/health`. Sin header, con un token que no existe, vencido (30 días) o cerrado, responden **401**: la app borra el token y vuelve al login.
+- El token es aleatorio (64 caracteres hex) y se guarda solo su SHA-256 en la tabla `Sesion`. Se eligió esto y no JWT porque el logout tiene que invalidar el token al instante: con la tabla es un `delete`, con JWT habría que llevar una lista negra igual. Tampoco hace falta una clave secreta en el `.env`.
+- El middleware `requiereUsuario` (`src/middlewares/requiereUsuario.ts`) lee el token y pone `req.usuarioId`. Las rutas usan siempre `req.usuarioId`; nunca un id fijo ni uno que venga en el body.
+
 ### Códigos de estado
 
 No es una lista cerrada: la regla es responder con el status que corresponde a cada caso.
@@ -57,7 +66,7 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 | 201 | POST creó el recurso (se devuelve lo creado) |
 | 204 | DELETE salió bien, **sin body** |
 | 400 | datos o id inválidos |
-| 401 | sin sesión o token inválido |
+| 401 | sin `Authorization: Bearer`, token inválido, vencido o cerrado con logout; login con email o contraseña incorrectos |
 | 403 | con sesión, pero sin permiso sobre ese recurso |
 | 404 | no existe |
 | 409 | conflicto con el estado actual: email ya registrado, ya asignado a la mascota, único dueño que quiere desasignarse |
@@ -86,12 +95,12 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 - Las reglas están en `src/validaciones.ts`, que es el espejo de `validaciones.ts` del front (más las opciones de cada campo que usan los formularios). Los valores fijos se validan contra `src/dominio.ts` (incluidos `RADIOS_BUSQUEDA` y `MAXIMO_ETIQUETAS`).
 - Si una regla cambia en un repo, cambia en el otro. Los mensajes de error son los mismos que usa la app; los genéricos de largo y caracteres llevan el campo adelante ("Nombre: puede tener hasta 30 caracteres."), porque la app los muestra en un Alert y no debajo del input.
 - **Fechas:** las sin hora llegan como `AAAA-MM-DD` (se rechaza otro formato) y las de turnos y reportes como ISO con hora. "Hoy" se calcula en la zona de Argentina, aunque el servidor esté en UTC. Al editar un turno, "a futuro" solo se exige si cambió la fecha (se puede corregir el motivo de uno que ya pasó).
-- La contraseña nueva se valida en la Etapa 4, cuando estén el registro y el login.
 
 ## Datos sensibles
 
 - **Nunca devolver `passwordHash`** (ni en login, ni en `/me`, ni dentro de una relación incluida). Usar `select` u omitir el campo antes de responder.
-- Las contraseñas se guardan hasheadas, nunca en texto plano.
+- Las contraseñas se guardan hasheadas con bcrypt, nunca en texto plano. Los tokens de sesión, como SHA-256 (`Sesion.tokenHash`).
+- El login no dice si el email existe: mismo mensaje y, cuando no hay cuenta, igual compara contra un hash de relleno para tardar lo mismo.
 - Nada de secretos en el código: van en el `.env`, que no se versiona (`.env.example` sí).
 
 ## Prisma
