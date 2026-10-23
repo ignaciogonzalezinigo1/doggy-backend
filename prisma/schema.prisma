@@ -43,6 +43,8 @@ model Usuario {
   reportes     ReportePerdida[]
   /// Códigos de asignación que generó.
   invitaciones Invitacion[]
+  /// Sesiones abiertas (una por login).
+  sesiones     Sesion[]
 }
 
 /// Perro registrado por un usuario (Doggy es solo para perros).
@@ -167,4 +169,18 @@ model Invitacion {
   creadaPor   Usuario  @relation(fields: [creadaPorId], references: [id], onDelete: Cascade)
   vence       DateTime
   usada       Boolean  @default(false)
+}
+
+/// Sesión abierta con login o registro. El token viaja en `Authorization: Bearer`;
+/// acá se guarda solo su hash SHA-256, así una copia de la base no sirve para entrar.
+/// El logout la borra.
+model Sesion {
+  id        Int      @id @default(autoincrement())
+  /// SHA-256 del token en hexadecimal.
+  tokenHash String   @unique
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  creadaEn  DateTime @default(now())
+  /// Después de esta fecha el token ya no sirve (401).
+  vence     DateTime
 }

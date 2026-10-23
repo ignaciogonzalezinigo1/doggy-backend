@@ -402,6 +402,7 @@ async function sembrar(): Promise<void> {
 
   await prisma.$transaction(async (tx) => {
     // Primero las tablas que dependen de otras.
+    await tx.sesion.deleteMany();
     await tx.etiqueta.deleteMany();
     await tx.reportePerdida.deleteMany();
     await tx.invitacion.deleteMany();
