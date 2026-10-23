@@ -2,6 +2,7 @@
 # Pruebas de la API de Doggy con curl.
 #
 # Resetea una base aparte (test.db) con los datos del seed, levanta el servidor en el puerto 3001,
+# hace login con usuarios del seed (contraseña doggy1234) y usa sus tokens,
 # prueba todos los endpoints (también sus casos de error) y muestra una tabla
 # con el endpoint, el caso, el status esperado y el obtenido. Además chequea
 # partes del contenido de algunas respuestas. Sale con 1 si algo falla.
@@ -27,6 +28,10 @@ LOG="$TMP/servidor.log"
 SERVIDOR=""
 SECCION=""
 LAST=""
+# Token con el que se hacen los pedidos (vacío: sin header Authorization). Se cambia con `como`.
+TOKEN=""
+# Contraseña de todos los usuarios del seed.
+PASSWORD_SEED="doggy1234"
 
 # --- Preparación ---
 
@@ -87,15 +92,18 @@ fila() {
 # Primeros caracteres de la última respuesta, en una línea, para la tabla.
 resumen() { printf '%s' "$LAST" | head -c 200 | tr '\t\n' '  '; }
 
+# Elige con qué token se hacen los pedidos que siguen: como <token> (vacío: sin sesión).
+como() { TOKEN="$1"; }
+
 # Hace un pedido y compara el status: t <caso> <esperado> <método> <ruta> [body]
+# Manda `Authorization: Bearer $TOKEN` si hay token elegido con `como`.
 # La respuesta queda en $LAST para las verificaciones que siguen.
 t() {
   local caso="$1" esperado="$2" metodo="$3" ruta="$4" body="${5:-}" status
-  if [ -n "$body" ]; then
-    status=$(curl -s -o "$OUT" -w '%{http_code}' -X "$metodo" -H 'Content-Type: application/json' -d "$body" "$API$ruta")
-  else
-    status=$(curl -s -o "$OUT" -w '%{http_code}' -X "$metodo" "$API$ruta")
-  fi
+  local args=(-s -o "$OUT" -w '%{http_code}' -X "$metodo")
+  [ -n "$TOKEN" ] && args+=(-H "Authorization: Bearer $TOKEN")
+  [ -n "$body" ] && args+=(-H 'Content-Type: application/json' -d "$body")
+  status=$(curl "${args[@]}" "$API$ruta")
   # Un 204 tiene que venir sin body.
   if [ "$status" = 204 ] && [ -s "$OUT" ]; then status="204 con body"; fi
   LAST=$(cat "$OUT")
@@ -111,6 +119,19 @@ jget() { node -e 'const r = JSON.parse(process.argv[1]); const x = eval("r" + pr
 jmap() { node -e 'const r = JSON.parse(process.argv[1]); console.log(eval(process.argv[2]))' "$LAST" "$1" 2>/dev/null; }
 # Condición sobre la última respuesta, que queda en r: responde "sí" o "no".
 jok() { node -e 'const r = JSON.parse(process.argv[1]); console.log(eval(process.argv[2]) ? "sí" : "no")' "$LAST" "$1" 2>/dev/null || echo "no"; }
+
+# Hace login con un usuario del seed y devuelve el token. Corta las pruebas si falla.
+# Uso: TOKEN_X=$(login <email>)
+login() {
+  curl -s -X POST -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$1\",\"password\":\"$PASSWORD_SEED\"}" "$API/api/auth/login" |
+    node -e 'let d = ""; process.stdin.on("data", (c) => (d += c)).on("end", () => { const t = JSON.parse(d).token; if (!t) process.exit(1); console.log(t); })'
+}
+
+# Vence en la base la última sesión abierta (para probar un token vencido).
+vencer_ultima_sesion() {
+  sqlite3 "$DB" "update Sesion set vence = '$(date -u -v-1H +%Y-%m-%dT%H:%M:%S.000+00:00)' where id = (select max(id) from Sesion);"
+}
 
 # Inserta en la base un reporte activo de otro autor y devuelve su id.
 # Uso: reporte_de <autorId> <mascotaId> <estado> <nombre>
@@ -132,9 +153,102 @@ TOBY_REG=$(sqlite3 "$DB" "select max(id) from RegistroSanitario;")
 sqlite3 "$DB" "insert into Turno (mascotaId,categoria,fecha,motivo,lugar) values (4,'veterinario','$(date -u -v+5d +%Y-%m-%dT15:00:00.000+00:00)','Control','Vet. Centro');"
 TOBY_TUR=$(sqlite3 "$DB" "select max(id) from Turno;")
 
-seccion "Lecturas"
-t "API levantada" 200 GET /api/health
+# Sesiones de los usuarios del seed que se usan en las pruebas.
+SOFIA=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
+LUCIA=$(login lucia.gomez@mail.com) || abortar "no se pudo hacer login con Lucía."
+CARLOS=$(login carlos.romero@mail.com) || abortar "no se pudo hacer login con Carlos."
+
+seccion "Auth: registro"
+como ""
+t "API levantada (pública)" 200 GET /api/health
 v "responde { ok: true }" true "$(jget .ok)"
+t "registro válido" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":" Ana.Ruiz@MAIL.com ","password":"perro1234","passwordHash":"x","id":1}'
+NUEVO_TOKEN=$(jget .token); NUEVO_ID=$(jget .usuario.id)
+v "devuelve un token" sí "$(jok 'typeof r.token === "string" && r.token.length >= 32')"
+v "email limpio y en minúsculas" ana.ruiz@mail.com "$(jget .usuario.email)"
+v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r.usuario)')"
+v "id nuevo (no el del body)" sí "$(jok 'r.usuario.id > 20')"
+v "la contraseña se guarda hasheada" 1 "$(sqlite3 "$DB" "select passwordHash like '\$2%' from Usuario where id = $NUEVO_ID;")"
+t "email ya registrado (otras mayúsculas)" 409 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ANA.RUIZ@mail.com","password":"perro1234"}'
+t "email de una cuenta del seed" 409 POST /api/auth/registro '{"nombre":"Sofía","apellido":"Romero","email":"sofia.romero@mail.com","password":"perro1234"}'
+t "contraseña de 7 caracteres" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perro12"}'
+t "contraseña sin números" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perroperro"}'
+v "mensaje de la app" "Usá al menos una letra y un número." "$(jget .error)"
+t "contraseña con espacios" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perro 1234"}'
+t "contraseña de 65 caracteres" 400 POST /api/auth/registro "{\"nombre\":\"Ana\",\"apellido\":\"Ruiz\",\"email\":\"ana2@mail.com\",\"password\":\"a1$(printf 'x%.0s' $(seq 63))\"}"
+t "contraseña que no es texto" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":12345678}'
+t "nombre con números" 400 POST /api/auth/registro '{"nombre":"Ana2","apellido":"Ruiz","email":"ana2@mail.com","password":"perro1234"}'
+t "apellido vacío" 400 POST /api/auth/registro '{"nombre":"Ana","email":"ana2@mail.com","password":"perro1234"}'
+t "email inválido" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana@mail","password":"perro1234"}'
+como "$NUEVO_TOKEN"
+t "el token del registro sirve" 200 GET /api/usuarios/me
+v "es la cuenta nueva" "$NUEVO_ID" "$(jget .id)"
+t "la cuenta nueva no ve mascotas ajenas" 200 GET /api/mascotas
+v "lista vacía" 0 "$(jget .length)"
+t "la cuenta nueva no ve registros ajenos" 200 GET /api/registros
+v "lista vacía" 0 "$(jget .length)"
+t "no puede editar a Luna" 403 PATCH /api/mascotas/1 '{"nombre":"Pampa"}'
+
+seccion "Auth: login y logout"
+como ""
+t "login válido" 200 POST /api/auth/login '{"email":"sofia.romero@mail.com","password":"doggy1234"}'
+v "es Sofía" 1 "$(jget .usuario.id)"
+v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r.usuario)')"
+t "login con email en mayúsculas" 200 POST /api/auth/login '{"email":" SOFIA.ROMERO@mail.com","password":"doggy1234"}'
+t "login con la cuenta nueva" 200 POST /api/auth/login '{"email":"ana.ruiz@mail.com","password":"perro1234"}'
+t "contraseña incorrecta" 401 POST /api/auth/login '{"email":"sofia.romero@mail.com","password":"doggy12345"}'
+MSG_PASSWORD=$(jget .error)
+v "mensaje genérico" "Email o contraseña incorrectos" "$MSG_PASSWORD"
+t "email sin cuenta" 401 POST /api/auth/login '{"email":"nadie@mail.com","password":"doggy1234"}'
+v "mismo mensaje que con contraseña incorrecta" "$MSG_PASSWORD" "$(jget .error)"
+t "sin contraseña" 400 POST /api/auth/login '{"email":"sofia.romero@mail.com"}'
+t "body no JSON objeto" 400 POST /api/auth/login '[1,2]'
+t "sin token" 401 GET /api/mascotas
+v "error en español" sí "$(jok 'typeof r.error === "string" && r.error.length > 0')"
+como "token-que-no-existe"
+t "token inválido" 401 GET /api/mascotas
+t "token inválido en un DELETE" 401 DELETE /api/turnos/1
+VENCE=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
+VENCE_ID=$(sqlite3 "$DB" "select max(id) from Sesion;")
+vencer_ultima_sesion
+como "$VENCE"
+t "token vencido" 401 GET /api/usuarios/me
+v "la sesión vencida se borra" 0 "$(sqlite3 "$DB" "select count(*) from Sesion where id = $VENCE_ID;")"
+code=$(curl -s -o "$OUT" -w '%{http_code}' -H "Authorization: Token $SOFIA" "$API/api/usuarios/me"); LAST=$(cat "$OUT")
+fila http "GET /api/usuarios/me" "header sin 'Bearer'" 401 "$code" "$(resumen)"
+SALIR=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
+como "$SALIR"
+t "antes del logout el token sirve" 200 GET /api/usuarios/me
+t "logout" 204 POST /api/auth/logout
+t "el token del logout ya no sirve" 401 GET /api/usuarios/me
+t "logout otra vez con el mismo token" 401 POST /api/auth/logout
+como ""
+t "logout sin token" 401 POST /api/auth/logout
+como "$SOFIA"
+t "las otras sesiones de Sofía siguen" 200 GET /api/usuarios/me
+
+seccion "Permisos entre usuarios"
+como "$LUCIA"
+t "perfil con el token de Lucía" 200 GET /api/usuarios/me
+v "es Lucía" 20 "$(jget .id)"
+t "Lucía ve sus mascotas" 200 GET /api/mascotas
+v "solo Toby" 4 "$(jmap 'r.map((m) => m.id).join()')"
+t "Lucía edita el registro de Toby" 200 PATCH /api/registros/$TOBY_REG '{"profesional":"Vet. Norte"}'
+t "Lucía no edita a Luna (de Sofía)" 403 PATCH /api/mascotas/1 '{"nombre":"Pampa"}'
+t "Lucía no genera códigos de Roco" 403 POST /api/mascotas/2/invitaciones '{"rol":"invitado"}'
+t "Lucía da turno a Toby" 201 POST /api/turnos "{\"mascotaId\":4,\"categoria\":\"peluqueria\",\"fecha\":\"$FUT_ISO\",\"motivo\":\"Baño\",\"lugar\":\"Peluquería Canina\"}"
+TUR_LUCIA=$(jget .id)
+como "$CARLOS"
+t "Carlos (co-dueño) ve a Luna" 200 GET /api/mascotas
+v "Luna está en su lista" sí "$(jok 'r.some((m) => m.id === 1) && !r.some((m) => m.id === 4)')"
+t "Carlos edita a Luna" 200 PATCH /api/mascotas/1 '{"senas":"Mancha blanca en la pata"}'
+t "Carlos no toca el turno de Toby" 403 PATCH /api/turnos/$TUR_LUCIA '{"lugar":"Otro lugar"}'
+como "$SOFIA"
+t "Sofía no borra el turno de Lucía" 403 DELETE /api/turnos/$TUR_LUCIA
+t "Sofía no edita el registro de Toby" 403 PATCH /api/registros/$TOBY_REG '{"nombre":"Quíntuple"}'
+
+seccion "Lecturas"
+como "$SOFIA"
 t "perfil de la sesión (Sofía)" 200 GET /api/usuarios/me
 v "es Sofía" 1 "$(jget .id)"
 v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r)')"
@@ -271,14 +385,14 @@ t "encontrado propio de mascota ajena: lo edita el autor" 200 PATCH /api/reporte
 
 seccion "Invitaciones y cuidadores"
 t "genera código (dueña de Luna)" 201 POST /api/mascotas/1/invitaciones '{"rol":"invitado"}'
-TOKEN=$(jget .token)
-v "código de 8 caracteres" 8 "${#TOKEN}"
+CODIGO_LUNA=$(jget .token)
+v "código de 8 caracteres" 8 "${#CODIGO_LUNA}"
 v "trae la mascota" Luna "$(jget .mascota.nombre)"
 t "rol inválido" 400 POST /api/mascotas/1/invitaciones '{"rol":"admin"}'
 t "mascota no asignada (Toby)" 403 POST /api/mascotas/4/invitaciones '{"rol":"invitado"}'
 t "mascota no existe" 404 POST /api/mascotas/9999/invitaciones '{"rol":"invitado"}'
-t "ver código propio" 200 GET /api/invitaciones/$TOKEN
-t "aceptar código de mascota propia" 409 POST /api/invitaciones/$TOKEN/aceptar
+t "ver código propio" 200 GET /api/invitaciones/$CODIGO_LUNA
+t "aceptar código de mascota propia" 409 POST /api/invitaciones/$CODIGO_LUNA/aceptar
 t "ver TOBY2026 (en minúsculas)" 200 GET /api/invitaciones/toby2026
 t "aceptar TOBY2026" 200 POST /api/invitaciones/TOBY2026/aceptar
 v "queda como invitada" invitado "$(jget .rol)"
