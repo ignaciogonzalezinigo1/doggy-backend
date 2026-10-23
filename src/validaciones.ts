@@ -11,8 +11,6 @@
  * válido. La única diferencia con la app: los mensajes genéricos ("Puede tener
  * hasta 30 caracteres.") llevan adelante el nombre del campo, porque acá no
  * hay un formulario que muestre el error debajo del input.
- *
- * Las reglas de la contraseña se suman en la Etapa 4, con el login.
  */
 
 /** Largo máximo de cada campo de texto (el `maxLength` de los inputs de la app). */
@@ -201,6 +199,43 @@ export function validarEmail(email: string): string | undefined {
  */
 export function normalizarEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/**
+ * Valida la contraseña del login: obligatoria y sin pasarse del largo máximo.
+ * @param password texto recibido
+ * @returns mensaje de error o undefined
+ */
+export function validarPasswordRequerida(password: string): string | undefined {
+  if (!password) return 'Ingresá tu contraseña.';
+  if (password.length > LIMITES.password) {
+    return `La contraseña puede tener hasta ${LIMITES.password} caracteres.`;
+  }
+  return undefined;
+}
+
+/** Largo mínimo de una contraseña nueva. */
+export const PASSWORD_MIN = 8;
+
+/**
+ * Valida una contraseña nueva: entre 8 y 64 caracteres, sin espacios y con
+ * al menos una letra y un número.
+ * @param password texto recibido
+ * @returns mensaje de error o undefined
+ */
+export function validarPasswordNueva(password: string): string | undefined {
+  if (!password) return 'Ingresá una contraseña.';
+  if (password.length < PASSWORD_MIN) {
+    return `La contraseña tiene que tener al menos ${PASSWORD_MIN} caracteres.`;
+  }
+  if (password.length > LIMITES.password) {
+    return `La contraseña puede tener hasta ${LIMITES.password} caracteres.`;
+  }
+  if (/\s/.test(password)) return 'La contraseña no puede tener espacios.';
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return 'Usá al menos una letra y un número.';
+  }
+  return undefined;
 }
 
 /**
