@@ -86,7 +86,7 @@ Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y ca
 | `npm run db:seed` | Carga los datos de ejemplo |
 | `npm run db:reset` | Borra la base, la vuelve a crear y carga los datos de ejemplo |
 | `npm run studio` | Abre Prisma Studio para ver y editar la base |
-| `npm test` | Resetea la base, levanta la API en el puerto 3001 y prueba todos los endpoints (ver [Pruebas](#pruebas)) |
+| `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
 
 ## Endpoints
 
@@ -134,7 +134,7 @@ npm test
 
 Corre `scripts/probar.sh`, que prueba la API con `curl`:
 
-1. Resetea la base con `npm run db:reset` (**borra los datos de `dev.db`** y carga los del seed).
+1. Resetea su propia base, `test.db`, con `npm run db:reset` (la borra, la vuelve a crear y carga los datos del seed). El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. `test.db` está ignorada en git, como todas las `*.db`.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre).
 3. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido de algunas respuestas (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.).
 4. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.

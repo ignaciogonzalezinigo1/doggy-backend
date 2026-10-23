@@ -1,13 +1,14 @@
 #!/bin/bash
 # Pruebas de la API de Doggy con curl.
 #
-# Resetea la base con los datos del seed, levanta el servidor en el puerto 3001,
+# Resetea una base aparte (test.db) con los datos del seed, levanta el servidor en el puerto 3001,
 # prueba todos los endpoints (también sus casos de error) y muestra una tabla
 # con el endpoint, el caso, el status esperado y el obtenido. Además chequea
 # partes del contenido de algunas respuestas. Sale con 1 si algo falla.
 #
 # Uso: npm test (o bash scripts/probar.sh). Necesita curl y sqlite3.
-# Ojo: borra lo que haya en la base y vuelve a cargar los datos de ejemplo.
+# Usa su propia base, test.db, y nunca toca la dev.db de la app: cada corrida
+# la borra y la vuelve a crear con los datos de ejemplo.
 
 set -u
 
@@ -49,16 +50,17 @@ command -v sqlite3 > /dev/null || abortar "falta sqlite3."
 [ -f .env ] || abortar "falta el .env (cp .env.example .env)."
 [ -d node_modules ] || abortar "faltan las dependencias (npm install)."
 
-# Archivo de la base: el de DATABASE_URL del .env, relativo a la raíz.
-URL_DB=$(grep -E '^DATABASE_URL=' .env | head -n 1 | cut -d= -f2- | tr -d "\"'")
-DB="$RAIZ/${URL_DB#file:./}"
-[ -n "$URL_DB" ] || DB="$RAIZ/dev.db"
+# Base de las pruebas, aparte de la de la app. Se exporta DATABASE_URL para
+# que la usen el reset (CLI de Prisma y seed) y el servidor: dotenv no pisa
+# una variable que ya está definida, así que el .env no la cambia.
+DB="$RAIZ/test.db"
+export DATABASE_URL="file:./test.db"
 
 if curl -s -o /dev/null "$API/api/health"; then
   abortar "ya hay algo escuchando en el puerto $PUERTO. Bajalo y volvé a correr las pruebas."
 fi
 
-echo "Reseteando la base ($DB)…"
+echo "Reseteando la base de pruebas ($DB)…"
 npm run db:reset > "$TMP/reset.log" 2>&1 || { cat "$TMP/reset.log" >&2; abortar "no se pudo resetear la base."; }
 
 echo "Levantando la API en el puerto $PUERTO…"
