@@ -86,6 +86,7 @@ Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y ca
 | `npm run db:seed` | Carga los datos de ejemplo |
 | `npm run db:reset` | Borra la base, la vuelve a crear y carga los datos de ejemplo |
 | `npm run studio` | Abre Prisma Studio para ver y editar la base |
+| `npm test` | Resetea la base, levanta la API en el puerto 3001 y prueba todos los endpoints (ver [Pruebas](#pruebas)) |
 
 ## Endpoints
 
@@ -125,6 +126,22 @@ curl -X POST http://localhost:3000/api/mascotas -H 'Content-Type: application/js
   -d '{"nombre":"Pampa","raza":"Mestizo","edad":2,"senas":"Mancha blanca en el pecho"}'
 ```
 
+## Pruebas
+
+```bash
+npm test
+```
+
+Corre `scripts/probar.sh`, que prueba la API con `curl`:
+
+1. Resetea la base con `npm run db:reset` (**borra los datos de `dev.db`** y carga los del seed).
+2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre).
+3. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido de algunas respuestas (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.).
+4. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
+5. Baja el servidor al terminar.
+
+Necesita `curl` y `sqlite3` (vienen con macOS), el `.env` y las dependencias instaladas. Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, un código de asignación vencido o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`, y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`.
+
 ## Estructura
 
 ```
@@ -133,6 +150,8 @@ doggy-backend/
 │   ├── schema.prisma     modelo de datos
 │   └── seed.ts           datos de ejemplo
 ├── prisma.config.ts      configuración de la CLI de Prisma (URL de la base, seed)
+├── scripts/
+│   └── probar.sh         pruebas de todos los endpoints con curl (npm test)
 └── src/
     ├── index.ts          app de Express y montaje de las rutas
     ├── rutas/            una por recurso (mascotas, registros, turnos, reportes, invitaciones…)

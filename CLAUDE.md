@@ -129,6 +129,6 @@ Algunos campos no se guardan con la misma forma con la que viajan. La ruta los t
 
 1. `npx tsc --noEmit` sin errores.
 2. Si se tocó el schema, `npx prisma generate` (o `npm run db:init`).
-3. Levantar la API (`npm run dev`) y probar los endpoints tocados.
+3. Levantar la API (`npm run dev`) y probar los endpoints tocados. `npm test` corre todas las pruebas con curl (resetea la base).
 4. Si se tocó el contrato, revisar que `doggy` quede igual (services, tipos y su `CLAUDE.md`).
 5. Hacer los commits y dar un resumen corto: qué se hizo, qué decisiones se tomaron, qué hay que probar y los commits que quedaron.

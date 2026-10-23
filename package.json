@@ -10,6 +10,7 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma db push --force-reset && prisma generate && prisma db seed",
     "studio": "prisma studio",
+    "test": "bash scripts/probar.sh",
     "postinstall": "prisma generate"
   },
   "dependencies": {
