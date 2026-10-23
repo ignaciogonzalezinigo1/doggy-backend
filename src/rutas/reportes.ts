@@ -3,6 +3,10 @@
  *
  * Un reporte no se borra: al cerrarlo ("Ya apareció") se le pone la fecha en
  * `cerradoEn` y deja de salir en el mapa, pero queda el historial.
+ *
+ * Lo edita o lo cierra quien lo publicó o cualquier persona asignada a la
+ * mascota del reporte (dueño o invitado), así si la encuentra otro integrante
+ * de la familia la saca del mapa. Un reporte sin mascota solo lo gestiona su autor.
  */
 
 import { Router } from 'express';
@@ -19,7 +23,8 @@ export const reportesRouter = Router();
 const ACTIVOS = { cerradoEn: null };
 
 const MENSAJE_REPORTE_NO_EXISTE = 'No encontramos el reporte.';
-const MENSAJE_SOLO_AUTOR = 'Solo quien publicó el reporte puede modificarlo.';
+const MENSAJE_SIN_PERMISO_REPORTE =
+  'Solo quien publicó el reporte o quien tiene la mascota en su cuenta puede modificarlo.';
 const MENSAJE_REPORTE_CERRADO = 'Este reporte ya está cerrado.';
 const MENSAJE_YA_REPORTADA = 'Esta mascota ya tiene un reporte de pérdida activo.';
 
@@ -41,6 +46,21 @@ function crearEtiquetas(etiquetas: string[]) {
  */
 function reemplazarEtiquetas(etiquetas: string[]) {
   return { deleteMany: {}, ...crearEtiquetas(etiquetas) };
+}
+
+/**
+ * Indica si un usuario puede editar o cerrar un reporte: lo publicó él o está
+ * asignado a la mascota del reporte (dueño o invitado).
+ * @param reporte autor y mascota del reporte
+ * @param usuarioId usuario de la sesión
+ * @returns true si puede gestionarlo
+ */
+async function puedeGestionar(
+  reporte: { autorId: number; mascotaId: number | null },
+  usuarioId: number,
+): Promise<boolean> {
+  if (reporte.autorId === usuarioId) return true;
+  return reporte.mascotaId !== null && (await rolEn(reporte.mascotaId, usuarioId)) !== null;
 }
 
 /**
@@ -112,13 +132,14 @@ reportesRouter.post('/', async (req, res) => {
 });
 
 /**
- * PATCH /api/reportes/:id: modifica un reporte activo o lo cierra. Solo el autor.
+ * PATCH /api/reportes/:id: modifica un reporte activo o lo cierra. Puede
+ * hacerlo el autor o quien esté asignado a la mascota del reporte.
  * Body (todos opcionales): nombre, raza, descripcion, foto, etiquetas (si
  * vienen, reemplazan todas), lat, lng, zona, fecha, radioMetros,
  * infoAdicional (null la borra) y cerrado: true para cerrarlo ("Ya apareció").
  * El estado y la mascota no se cambian.
  * Responde 200 con el ReportePerdida, 400 si el id o un dato no es válido,
- * 403 si no es el autor, 404 si no existe, 409 si ya estaba cerrado o 500.
+ * 403 si no es el autor ni está asignado a la mascota, 404 si no existe, 409 si ya estaba cerrado o 500.
  */
 reportesRouter.patch('/:id', async (req, res) => {
   const id = parseId(req.params.id);
@@ -132,8 +153,8 @@ reportesRouter.patch('/:id', async (req, res) => {
       responderError(res, 404, MENSAJE_REPORTE_NO_EXISTE);
       return;
     }
-    if (actual.autorId !== req.usuarioId) {
-      responderError(res, 403, MENSAJE_SOLO_AUTOR);
+    if (!(await puedeGestionar(actual, req.usuarioId))) {
+      responderError(res, 403, MENSAJE_SIN_PERMISO_REPORTE);
       return;
     }
     if (actual.cerradoEn !== null) {

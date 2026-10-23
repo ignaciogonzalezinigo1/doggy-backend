@@ -109,7 +109,7 @@ Por ahora todos los pedidos se atienden como Sofía (usuaria 1 del seed); el log
 | DELETE | `/api/turnos/:id` | — | 204 · 400 · 403 · 404 |
 | GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos) |
 | POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros`, `infoAdicional` | 201 ReportePerdida · 400 · 403 · 404 · 409 ya tiene uno de pérdida activo |
-| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 403 no es el autor · 404 · 409 ya cerrado |
+| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 403 no es el autor ni está asignado a la mascota · 404 · 409 ya cerrado |
 | GET | `/api/cuidadores` | — | 200 Cuidador[] |
 | DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 403 · 404 · 409 único dueño |
 | POST | `/api/mascotas/:id/invitaciones` | `rol` | 201 Invitacion (8 caracteres, vence a 7 días) · 400 · 403 no es dueño · 404 |
