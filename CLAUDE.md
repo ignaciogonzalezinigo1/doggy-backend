@@ -29,7 +29,7 @@ Lo que sigue lo tienen que respetar los dos repos. **Si algo del contrato cambia
 | --- | --- |
 | Auth | `POST /api/auth/registro`, `POST /api/auth/login`, `POST /api/auth/logout` |
 | Usuario | `GET /api/usuarios/me`, `PATCH /api/usuarios/me` |
-| Mascotas | `GET /api/mascotas`, `POST /api/mascotas`, `PATCH /api/mascotas/:id` |
+| Mascotas | `GET /api/mascotas`, `GET /api/mascotas/codigo/:codigo`, `POST /api/mascotas`, `PATCH /api/mascotas/:id` |
 | Registros | `GET /api/registros`, `POST /api/mascotas/:id/registros`, `PATCH /api/registros/:id`, `DELETE /api/registros/:id` |
 | Turnos | `GET /api/turnos`, `POST /api/turnos`, `PATCH /api/turnos/:id`, `DELETE /api/turnos/:id` |
 | Reportes | `GET /api/reportes`, `POST /api/reportes`, `PATCH /api/reportes/:id` (también para cerrarlo) |
@@ -47,6 +47,7 @@ Además, `GET /api/health` → `{ ok: true }` para chequear que el servidor est�
 - **Para borrar un opcional en un PATCH se manda `null`** (`proximaDosis`, `fotoEtiqueta`, `infoAdicional`, `foto`). Un campo que no viene no se toca; ojo que `JSON.stringify` descarta los `undefined`.
 - **Permisos:** solo se escribe sobre mascotas a las que el usuario está asignado, como dueño o invitado (403 si no). Generar códigos de asignación es solo para dueños. Excepción: un reporte `encontrado` puede llevar el `mascotaId` de una mascota ajena (la que identificó el QR); solo se chequea que exista.
 - Una mascota tiene como mucho un reporte `perdido` activo (409 si ya tiene uno).
+- **Buscar por el código del QR:** `GET /api/mascotas/codigo/:codigo` (con token) es la única lectura de una mascota ajena, porque quien encuentra un perro casi nunca está asignado a él. Responde 200 con `MascotaPublica` (`id`, `nombre`, `raza`, `senas`, `foto`, `codigo`: nada de `tutorId`, edad, dueño ni carnet; la arma `aMascotaPublica`), 400 si no tiene el formato `DOGGY-XXXX-NOMBRE` y 404 si no existe. Acepta el código en minúsculas o con espacios alrededor (`normalizarCodigoMascota` en `src/lib/codigos.ts`). La app la usa en el escáner de "Encontré una mascota" y publica el `encontrado` con ese `id` como `mascotaId`.
 
 ### Fotos
 

@@ -121,6 +121,7 @@ Todas piden `Authorization: Bearer <token>` y pueden responder 401. "Asignado" q
 | GET | `/uploads/<nombre>` | — (pública, sin token) | 200 la imagen · 404 |
 | PATCH | `/api/usuarios/me` | `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia`, `foto` | 200 Usuario · 400 · 404 · 409 email de otra cuenta |
 | GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) |
+| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, senas, foto, codigo }` (solo datos públicos, también de mascotas ajenas: es para quien escanea la chapita) · 400 no es `DOGGY-XXXX-NOMBRE` · 404 |
 | POST | `/api/mascotas` | `nombre`, `raza`, `edad`, `senas`, `foto` | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 |
 | PATCH | `/api/mascotas/:id` | los mismos, opcionales (el código no cambia) | 200 Mascota · 400 · 403 · 404 |
 | GET | `/api/registros` | — | 200 RegistroSanitario[] |
