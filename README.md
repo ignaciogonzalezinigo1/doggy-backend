@@ -1,10 +1,10 @@
 # Doggy Backend
 
-API de **Doggy**, la app móvil para el cuidado y la seguridad de tu perro: mascotas de la familia, carnet sanitario, turnos y reportes de perros perdidos o encontrados.
+API de **Doggy**, la app móvil para el cuidado y la seguridad de tu perro: mascotas de la familia, carnet sanitario, turnos, reportes de perros perdidos o encontrados en un mapa colaborativo y un QR de identificación en la chapita.
 
-Proyecto de la materia Programación de Aplicaciones Móviles (UCA). Sprint 2: backend.
+Proyecto de la materia Programación de Aplicaciones Móviles (UCA), Sprint 2. Guarda los datos de la app, maneja las cuentas y las sesiones, controla quién puede ver y modificar cada cosa y recibe las fotos.
 
-La app (Expo + React Native) está en otro repositorio: **[doggy](https://github.com/ignaciogonzalezinigo1/doggy)**. Le habla a esta API por HTTP.
+La app (Expo + React Native) está en otro repositorio: **[doggy](https://github.com/ignaciogonzalezinigo1/doggy)**. Le habla a esta API por HTTP. En el README de `doggy` está cómo levantar todo junto, de punta a punta.
 
 ## Integrantes
 
@@ -12,29 +12,39 @@ La app (Expo + React Native) está en otro repositorio: **[doggy](https://github
 
 ## Stack
 
-- Node + Express 5 con TypeScript estricto (se corre con `tsx`)
-- Prisma 7 con SQLite (adapter `@prisma/adapter-better-sqlite3`)
+- Node + **Express 5** con TypeScript estricto (se corre con `tsx`, sin compilar)
+- **Prisma 7** con **SQLite** (adapter `@prisma/adapter-better-sqlite3`)
+- `bcryptjs` para las contraseñas, `node:crypto` para los tokens de sesión
+- `multer` para recibir las fotos (`multipart/form-data`)
 - `cors` para que la app pueda llamar a la API
 
 ```
-doggy (app) ──HTTP──► Express → Prisma → SQLite
+doggy (app) ──HTTP/JSON──► Express ──► Prisma ──► SQLite (dev.db)
+                           recibe,     modelo y    guarda
+                           valida y    consultas
+                           decide
 ```
+
+- **Express** recibe el pedido, valida los datos, chequea la sesión y los permisos, elige el status y arma la respuesta.
+- **Prisma** define el modelo (`prisma/schema.prisma`) y hace las consultas con el cliente de `src/lib/prisma.ts`. No valida reglas de negocio.
+- **SQLite** guarda todo en un archivo, `dev.db`, que no se versiona.
 
 ## Cómo correrlo
 
-Requisitos: Node LTS.
+Requisitos: Node LTS. Para las pruebas, además, `curl` y `sqlite3` (vienen con macOS).
 
 ```bash
-npm install
-cp .env.example .env
-npm run db:init
-npm run db:seed
+cp .env.example .env # primero: el postinstall de npm install lo necesita
+npm install          # también genera el cliente de Prisma (postinstall)
+npm run db:reset     # crea dev.db con el schema y carga los datos de ejemplo
 npm run dev
 ```
 
+El `.env` va antes de `npm install` porque el `postinstall` corre `prisma generate`, y Prisma 7 lee `DATABASE_URL` de `prisma.config.ts` aunque solo vaya a generar el cliente. Sin el `.env` falla con `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`; se arregla copiando el `.env` y corriendo `npx prisma generate` (o `npm install` de nuevo).
+
 La API queda en `http://localhost:3000`. Para probar que anda: `http://localhost:3000/api/health` responde `{ "ok": true }`.
 
-Escucha en `0.0.0.0`, así que el celular la alcanza por la IP local de la PC (misma red Wi-Fi). En la app, configurá `EXPO_PUBLIC_API_URL` con esa IP (por ejemplo `http://192.168.0.10:3000`); los detalles están en el README de `doggy`.
+Escucha en `0.0.0.0`, así que el celular la alcanza por la IP local de la PC (misma red Wi-Fi). En la app, poné esa IP en `EXPO_PUBLIC_API_URL` (por ejemplo `http://192.168.0.10:3000`); los detalles, y los errores comunes de conexión, están en el README de `doggy`.
 
 Conviene clonar los dos repos uno al lado del otro:
 
@@ -46,7 +56,7 @@ carpeta-de-trabajo/
 
 ### Usuarios de prueba
 
-El seed (`prisma/seed.ts`) carga los datos de ejemplo de la demo; es la única fuente de esos datos, porque la app ya no tiene datos propios. Las fotos usan las claves de las imágenes empaquetadas en la app (`luna`, `sofia`, …). **Todos los usuarios tienen la contraseña `doggy1234`.**
+El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de esos datos, porque la app no tiene datos propios. Las fotos usan las claves de las imágenes empaquetadas en la app (`luna`, `sofia`, …). **Todos los usuarios tienen la contraseña `doggy1234`.**
 
 | Usuario | Email | Para qué sirve |
 | --- | --- | --- |
@@ -62,13 +72,28 @@ El seed (`prisma/seed.ts`) carga los datos de ejemplo de la demo; es la única f
 
 Las fechas de los reportes y los turnos se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido y los turnos no quedan viejos; los registros del carnet y la invitación tienen fechas fijas.
 
-### Resetear la base
+### Variables de entorno
 
-```bash
-npm run db:reset
-```
+| Variable | Default | Para qué |
+| --- | --- | --- |
+| `DATABASE_URL` | `file:./dev.db` | Archivo de la base SQLite. Sin ella la API no arranca ("Falta DATABASE_URL en el .env") |
+| `PORT` | `3000` | Puerto de la API |
+| `UPLOADS_DIR` | `uploads` | Carpeta de las fotos subidas (las pruebas usan una temporal) |
 
-Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y carga el seed. Sirve para volver a la demo limpia o después de cambiar el schema de forma incompatible. Para recargar solo los datos sin tocar las tablas: `npm run db:seed` (borra los datos y los vuelve a cargar).
+No hay claves secretas: el token de sesión es aleatorio y se valida contra la base, así que no hace falta un secreto para firmarlo.
+
+### Scripts
+
+| Script | Qué hace |
+| --- | --- |
+| `npm run dev` | Levanta la API y la reinicia al guardar cambios (`tsx watch`) |
+| `npm run db:init` | Aplica el schema a la base (`prisma db push`) y genera el cliente |
+| `npm run db:seed` | Borra los datos y vuelve a cargar los de ejemplo, sin tocar las tablas |
+| `npm run db:reset` | Borra la base, la vuelve a crear con el schema actual, genera el cliente y carga el seed |
+| `npm run studio` | Abre Prisma Studio para ver y editar la base (ver [Prisma Studio](#prisma-studio)) |
+| `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
+
+`db:reset` sirve para volver a la demo limpia o después de cambiar el schema de forma incompatible. En Prisma 7, `db push` no genera el cliente solo: por eso los scripts encadenan `prisma generate`.
 
 ### Prisma Studio
 
@@ -80,90 +105,87 @@ Abre Prisma Studio en `http://localhost:5555` con la base del `.env`. Se puede c
 
 No se usa `npx prisma studio` directo: con Prisma 7.10 responde *"Prisma Studio is not supported for the file:./dev.db protocol"*. Studio sí soporta SQLite, pero la CLI saca el protocolo cortando la URL en `://`, y `file:./dev.db` no lo tiene. Con una ruta absoluta (`file:///…/dev.db`) funciona, pero esa ruta cambia en cada PC y no puede ir en el `.env`. Por eso `npm run studio` corre `scripts/studio.ts`, que arma la URL absoluta a partir de `DATABASE_URL` y se la pasa a `prisma studio --url`. Probado en macOS; en Windows la ruta con `C:\` podría no pasar el mismo parseo.
 
-### Variables de entorno
+### Prisma 7: qué cambia respecto de los ejemplos clásicos
 
-| Variable | Default | Para qué |
-| --- | --- | --- |
-| `DATABASE_URL` | `file:./dev.db` | Archivo de la base SQLite |
-| `PORT` | `3000` | Puerto de la API |
-| `UPLOADS_DIR` | `uploads` | Carpeta de las fotos subidas (las pruebas usan una temporal) |
-
-### Scripts
-
-| Script | Qué hace |
-| --- | --- |
-| `npm run dev` | Levanta la API y la reinicia al guardar cambios |
-| `npm run db:init` | Aplica el schema a la base (`prisma db push`) y genera el cliente |
-| `npm run db:seed` | Carga los datos de ejemplo |
-| `npm run db:reset` | Borra la base, la vuelve a crear y carga los datos de ejemplo |
-| `npm run studio` | Abre Prisma Studio para ver y editar la base (ver [Prisma Studio](#prisma-studio)) |
-| `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
+- La URL de la base **no va en el `schema.prisma`**: va en `prisma.config.ts`, que lee `DATABASE_URL` del `.env` (importa `dotenv/config`, porque la CLI ya no lo carga sola).
+- El generador es `prisma-client` (no `prisma-client-js`) y escribe el cliente en `src/generated/prisma`, que no se versiona. Se importa de ahí, no de `@prisma/client`.
+- El cliente se conecta con un **driver adapter**: `new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) })` (`src/lib/prisma.ts`).
+- `db push` no genera el cliente; hay que correr `prisma generate` (lo hacen `db:init`, `db:reset` y el `postinstall`).
+- El seed se configura en `prisma.config.ts` (`migrations.seed`), no en el `package.json`.
 
 ## Endpoints
 
-### Sesión
+Todas las rutas responden JSON. Los errores llegan siempre como `{ "error": "mensaje en español" }`, que la app muestra tal cual. Cualquier ruta puede responder **500** si algo falla en el servidor (el detalle queda en la consola, al cliente le llega un mensaje genérico). Los DELETE responden **204 sin body**. Para modificar se usa **PATCH, nunca PUT**: un campo que no viene no se toca, y para borrar un opcional se manda `null`.
 
-Registro y login devuelven `{ "usuario": Usuario, "token": "..." }`. Todas las demás rutas (salvo `/api/health`) piden ese token en el header:
+**Sesión:** registro y login devuelven `{ "usuario": Usuario, "token": "..." }`. Las rutas marcadas con "Sí" piden ese token:
 
 ```
 Authorization: Bearer <token>
 ```
 
-Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado con el logout, responden **401** y la app vuelve al login. El token es aleatorio y el servidor guarda solo su hash en la tabla `Sesion`; el logout borra esa fila.
+Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado con el logout, responden **401** y la app vuelve al login. "Asignado" quiere decir que el usuario de la sesión es dueño o invitado de esa mascota.
 
-| Método | Ruta | Body | Respuestas |
-| --- | --- | --- | --- |
-| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `password` | 201 `{ usuario, token }` · 400 · 409 email ya registrado |
-| POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" |
-| POST | `/api/auth/logout` | — (con el header) | 204 · 401 |
+| Verbo | Ruta | Body | Status posibles | Sesión |
+| --- | --- | --- | --- | --- |
+| GET | `/api/health` | — | 200 `{ "ok": true }` | No |
+| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `password` | 201 `{ usuario, token }` · 400 · 409 email ya registrado | No |
+| POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" | No |
+| POST | `/api/auth/logout` | — | 204 · 401 | Sí |
+| GET | `/api/usuarios/me` | — | 200 Usuario · 401 · 404 | Sí |
+| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia`, `foto` | 200 Usuario · 400 · 401 · 404 · 409 email de otra cuenta | Sí |
+| POST | `/api/fotos` | `multipart/form-data`, archivo en el campo `foto` (JPG, PNG o WEBP, hasta 5 MB) | 201 `{ "foto": "/uploads/<nombre>.jpg" }` · 400 no vino o no es una imagen válida · 401 · 413 más de 5 MB | Sí |
+| GET | `/uploads/<nombre>` | — | 200 la imagen · 404 | No |
+| GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) · 401 | Sí |
+| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, senas, foto, codigo }` · 400 no es `DOGGY-XXXX-NOMBRE` · 401 · 404 | Sí |
+| POST | `/api/mascotas` | `nombre`, `raza`, `edad`, `senas`, `foto` (opcional) | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 · 401 | Sí |
+| PATCH | `/api/mascotas/:id` | los mismos, opcionales (el código no cambia) | 200 Mascota · 400 · 401 · 403 no asignado · 404 | Sí |
+| GET | `/api/registros` | — | 200 RegistroSanitario[] · 401 | Sí |
+| POST | `/api/mascotas/:id/registros` | `tipo`, `nombre`, `fecha` (AAAA-MM-DD), `profesional`, `proximaDosis` (opcional), `fotoEtiqueta` (opcional, solo vacunas) | 201 RegistroSanitario · 400 · 401 · 403 · 404 | Sí |
+| PATCH | `/api/registros/:id` | los mismos, opcionales (`null` borra `proximaDosis` y `fotoEtiqueta`) | 200 RegistroSanitario · 400 · 401 · 403 · 404 | Sí |
+| DELETE | `/api/registros/:id` | — | 204 · 400 · 401 · 403 · 404 | Sí |
+| GET | `/api/turnos` | — | 200 Turno[] · 401 | Sí |
+| POST | `/api/turnos` | `mascotaId`, `categoria`, `fecha` (ISO con hora, a futuro), `motivo`, `lugar` | 201 Turno · 400 · 401 · 403 · 404 | Sí |
+| PATCH | `/api/turnos/:id` | los mismos, opcionales ("a futuro" solo si cambia la fecha) | 200 Turno · 400 · 401 · 403 · 404 | Sí |
+| DELETE | `/api/turnos/:id` | — | 204 · 400 · 401 · 403 · 404 | Sí |
+| GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos, de todos los usuarios) · 401 | Sí |
+| POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros` (solo perdidos), `infoAdicional` (opcional) | 201 ReportePerdida · 400 · 401 · 403 perdido de una mascota no asignada · 404 · 409 ya tiene uno de pérdida activo | Sí |
+| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 401 · 403 no es el autor ni está asignado · 404 · 409 ya cerrado | Sí |
+| GET | `/api/cuidadores` | — | 200 Cuidador[] · 401 | Sí |
+| DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 401 · 403 · 404 · 409 único dueño | Sí |
+| POST | `/api/mascotas/:id/invitaciones` | `rol` (`dueno` o `invitado`) | 201 Invitacion (8 caracteres, vence a 7 días) · 400 · 401 · 403 no es dueño · 404 | Sí |
+| GET | `/api/invitaciones/:token` | — | 200 Invitacion · 400 · 401 · 404 · 410 usado o vencido | Sí |
+| POST | `/api/invitaciones/:token/aceptar` | — | 200 Cuidador · 400 · 401 · 404 · 409 ya asignado · 410 | Sí |
 
-La contraseña nueva tiene de 8 a 64 caracteres, sin espacios, con al menos una letra y un número; nombre y apellido, solo letras. El email se guarda en minúsculas. La cuenta nueva queda con `ubicacion` y `telefonoEmergencia` vacíos, para completar desde Editar perfil (`PATCH /api/usuarios/me`).
+Las respuestas tienen exactamente la forma de los tipos de `doggy/mobile/src/types/models.ts`: ids numéricos, fechas como string ISO (las del carnet, `AAAA-MM-DD`) y relaciones por id. Las reglas completas (permisos, validaciones y el contrato con la app) están en `CLAUDE.md`.
 
-### Recursos
+### Códigos de estado
 
-Todas piden `Authorization: Bearer <token>` y pueden responder 401. "Asignado" quiere decir que el usuario de la sesión es dueño o invitado de esa mascota.
-
-| Método | Ruta | Body | Respuestas |
-| --- | --- | --- | --- |
-| GET | `/api/health` | — (pública) | 200 `{ "ok": true }` |
-| GET | `/api/usuarios/me` | — | 200 Usuario · 404 |
-| POST | `/api/fotos` | multipart/form-data con el archivo en el campo `foto` (JPG, PNG o WEBP, hasta 5 MB) | 201 `{ "foto": "/uploads/<nombre>.jpg" }` · 400 no vino o no es una imagen válida · 413 pesa más de 5 MB |
-| GET | `/uploads/<nombre>` | — (pública, sin token) | 200 la imagen · 404 |
-| PATCH | `/api/usuarios/me` | `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia`, `foto` | 200 Usuario · 400 · 404 · 409 email de otra cuenta |
-| GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) |
-| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, senas, foto, codigo }` (solo datos públicos, también de mascotas ajenas: es para quien escanea la chapita) · 400 no es `DOGGY-XXXX-NOMBRE` · 404 |
-| POST | `/api/mascotas` | `nombre`, `raza`, `edad`, `senas`, `foto` | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 |
-| PATCH | `/api/mascotas/:id` | los mismos, opcionales (el código no cambia) | 200 Mascota · 400 · 403 · 404 |
-| GET | `/api/registros` | — | 200 RegistroSanitario[] |
-| POST | `/api/mascotas/:id/registros` | `tipo`, `nombre`, `fecha` (AAAA-MM-DD), `profesional`, `proximaDosis`, `fotoEtiqueta` | 201 RegistroSanitario · 400 · 403 · 404 |
-| PATCH | `/api/registros/:id` | los mismos, opcionales (`null` borra los opcionales) | 200 RegistroSanitario · 400 · 403 · 404 |
-| DELETE | `/api/registros/:id` | — | 204 · 400 · 403 · 404 |
-| GET | `/api/turnos` | — | 200 Turno[] |
-| POST | `/api/turnos` | `mascotaId`, `categoria`, `fecha` (ISO con hora, a futuro), `motivo`, `lugar` | 201 Turno · 400 · 403 · 404 |
-| PATCH | `/api/turnos/:id` | los mismos, opcionales ("a futuro" solo si cambia la fecha) | 200 Turno · 400 · 403 · 404 |
-| DELETE | `/api/turnos/:id` | — | 204 · 400 · 403 · 404 |
-| GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos) |
-| POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros`, `infoAdicional` | 201 ReportePerdida · 400 · 403 · 404 · 409 ya tiene uno de pérdida activo |
-| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 403 no es el autor ni está asignado a la mascota · 404 · 409 ya cerrado |
-| GET | `/api/cuidadores` | — | 200 Cuidador[] |
-| DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 403 · 404 · 409 único dueño |
-| POST | `/api/mascotas/:id/invitaciones` | `rol` | 201 Invitacion (8 caracteres, vence a 7 días) · 400 · 403 no es dueño · 404 |
-| GET | `/api/invitaciones/:token` | — | 200 Invitacion · 400 · 404 · 410 usado o vencido |
-| POST | `/api/invitaciones/:token/aceptar` | — | 200 Cuidador · 400 · 404 · 409 ya asignado · 410 |
-
-Los errores llegan siempre como `{ "error": "mensaje en español" }` y cualquier ruta puede responder 500 si algo falla en el servidor. Los DELETE responden 204 sin body. Las reglas completas (permisos, validaciones y el contrato con la app) están en `CLAUDE.md`.
+| Status | Cuándo |
+| --- | --- |
+| 200 | GET o PATCH salió bien |
+| 201 | POST creó el recurso (se devuelve lo creado) |
+| 204 | DELETE o logout salió bien, sin body |
+| 400 | datos, id o código con formato inválido |
+| 401 | sin sesión válida; login con email o contraseña incorrectos |
+| 403 | con sesión, pero sin permiso sobre ese recurso |
+| 404 | no existe |
+| 409 | conflicto con el estado actual: email ya registrado, ya asignado, único dueño, reporte ya cerrado o mascota ya reportada |
+| 410 | código de asignación vencido o ya usado |
+| 413 | la foto pesa más de 5 MB |
+| 500 | error imprevisto |
 
 ### Fotos
 
 Las fotos se suben aparte: la app primero hace `POST /api/fotos` y después manda la ruta que le devolvió en el campo `foto` (o `fotoEtiqueta`) de la mascota, el perfil, el reporte o el registro.
 
 - El archivo se guarda en `uploads/` con un nombre aleatorio (32 caracteres hex) y se sirve público en `/uploads/<nombre>`, así el componente `Image` de la app lo carga sin header. La carpeta está ignorada en git (se versiona solo el `.gitkeep`).
-- El tipo se valida por los primeros bytes del archivo (la firma de JPG, PNG o WEBP), no por el nombre ni el tipo que manda el cliente.
 - En la base se guarda la ruta relativa (`/uploads/abc.jpg`), nunca la URL completa: la IP de la PC cambia, y la app arma la URL con su `API_URL`.
 - Los campos de foto solo aceptan `null`, una clave de las fotos del seed (`luna`, `roco`, `milo`, `simba`, `sin-collar`, `sofia`, `carlos`) o una ruta `/uploads/` cuyo archivo exista. Una URI del celular (`file://`, `content://`, `blob:`) da 400.
 - Cuando una foto se reemplaza o se borra (también al borrar un registro o cuando deja de ser vacuna), se borra su archivo si ningún otro registro lo usa. Cerrar un reporte no borra su foto: queda como historial.
 
-Para probar a mano, primero hacé login y después usá el token:
+### Probar a mano
+
+Primero hacé login y después usá el token:
 
 ```bash
 curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
@@ -176,22 +198,72 @@ curl -X POST http://localhost:3000/api/mascotas -H 'Content-Type: application/js
 curl -X POST http://localhost:3000/api/fotos -H 'Authorization: Bearer <token>' -F 'foto=@perro.jpg'
 ```
 
+## Modelo de datos
+
+El modelo está en `prisma/schema.prisma`. Los nombres de modelos y campos son los mismos que los tipos de la app.
+
+```
+                 ┌──────────── Sesion (tokenHash, vence)
+                 │
+Usuario ─────────┼──< Cuidador >──────────┐            (tabla intermedia: rol dueno/invitado)
+  │  │           │                         │
+  │  │           └──< Invitacion >─────────┤            (código de asignación)
+  │  │                                     │
+  │  └──(tutorId)──< Mascota ──────────────┘
+  │                    │
+  │                    ├──< RegistroSanitario           (carnet)
+  │                    ├──< Turno
+  │                    └──< ReportePerdida (mascotaId opcional)
+  │                              │
+  └──(autorId)──────────────────<┘──< Etiqueta
+
+──<  "uno a muchos"
+```
+
+| Tabla | Qué guarda | Relaciones |
+| --- | --- | --- |
+| `Usuario` | Cuenta: nombre, apellido, email (único), ubicación, foto, teléfono de emergencia, `passwordHash` | Tiene muchas sesiones, asignaciones (`Cuidador`), mascotas dadas de alta, reportes e invitaciones generadas |
+| `Sesion` | `tokenHash` (SHA-256 del token, único), `vence` | Pertenece a un usuario (se borra con él) |
+| `Mascota` | Nombre, raza, edad, `codigo` (único, el del QR), señas, foto | Pertenece a su tutor (`tutorId`); tiene registros, turnos, cuidadores, reportes e invitaciones |
+| `Cuidador` | `rol` (`dueno` / `invitado`), detalle y tipo del vínculo | Une `Usuario` y `Mascota` (muchos a muchos). `@@unique([mascotaId, usuarioId])`: una persona no se asigna dos veces |
+| `Invitacion` | `token` (8 caracteres, clave primaria), `rol` ofrecido, `vence`, `usada` | Pertenece a una mascota y al dueño que la generó |
+| `RegistroSanitario` | Tipo (vacuna, desparasitación, otro), nombre, fecha, profesional, próxima dosis, foto de la etiqueta | Pertenece a una mascota (se borra con ella) |
+| `Turno` | Categoría, fecha y hora, motivo, lugar | Pertenece a una mascota (se borra con ella) |
+| `ReportePerdida` | Estado (perdido / encontrado), nombre, raza, descripción, foto, `lat`/`lng`, zona, fecha, radio, info adicional, `cerradoEn` | Pertenece a su autor; la mascota es opcional (un encontrado puede ser de un perro sin identificar) |
+| `Etiqueta` | Texto de una etiqueta ("Collar rojo") | Pertenece a un reporte. Tabla aparte porque SQLite no guarda listas; la API la devuelve como `etiquetas: string[]` |
+
+- **Los valores fijos** (`tipo`, `categoria`, `estado`, `rol`) se guardan como `String`, porque SQLite no hace cumplir los enums, y se validan en Express contra las listas de `src/dominio.ts`.
+- **Los reportes no se borran:** cerrarlo pone la fecha en `cerradoEn` y `GET /api/reportes` devuelve solo los que la tienen en `null`.
+- **Del modelo a la respuesta:** el nombre y la foto de un cuidador salen del `Usuario` (no se duplican), la `mascota` de una invitación sale de la relación y las fechas sin hora del carnet se guardan a medianoche UTC y se devuelven como `AAAA-MM-DD`. Las conversiones están en `src/respuestas.ts`.
+
+## Seguridad
+
+- **Contraseñas con bcrypt** (10 rondas, `src/lib/sesiones.ts`), nunca en texto plano. `passwordHash` no sale en ninguna respuesta: `aUsuario` (`src/respuestas.ts`) arma el JSON campo por campo.
+- **Login que no delata cuentas:** el mismo 401 "Email o contraseña incorrectos" si el email no existe o si la contraseña no coincide, y cuando no hay cuenta igual compara contra un hash de relleno para tardar lo mismo.
+- **Token de sesión hasheado:** el token son 32 bytes aleatorios (64 caracteres hex) que se le dan al cliente una sola vez. En la tabla `Sesion` queda solo su SHA-256, así una copia de la base no sirve para entrar. Dura 30 días y el logout borra la fila, por lo que el token deja de servir al instante. Se eligió esto y no JWT justamente por el logout: con JWT habría que llevar igual una lista negra.
+- **El usuario sale del token, nunca del body:** el middleware `requiereUsuario` (`src/middlewares/requiereUsuario.ts`) pone `req.usuarioId` y las rutas usan solo ese valor.
+- **Permisos por recurso** (`src/lib/asignaciones.ts`): solo se lee y se escribe sobre mascotas asignadas al usuario (403 si no). Generar códigos de asignación es solo para dueños. Un reporte lo edita o cierra su autor o alguien asignado a la mascota. La única lectura de una mascota ajena es la búsqueda por código del QR, que devuelve solo los datos públicos (`aMascotaPublica`).
+- **Validación en el servidor**, aunque la app ya haya validado: de cada body se toman solo los campos permitidos (`pick` en `src/lib/entrada.ts`, así no se puede mandar `id`, `tutorId` ni `passwordHash`), los ids de la URL pasan por `parseId` (400 si no son enteros positivos) y los datos por `src/validaciones.ts`, espejo de las reglas de la app (largos, caracteres permitidos, formatos y rangos de fechas, con "hoy" calculado en la zona de Argentina).
+- **Fotos verificadas por firma:** multer lee el archivo en memoria con tope de 5 MB (413 si se pasa) y `detectarFormato` (`src/lib/fotos.ts`) mira los primeros bytes: solo pasan JPG (`FF D8 FF`), PNG (`89 50 4E 47…`) y WEBP (`RIFF…WEBP`). El nombre y el mimetype que manda el cliente no se usan; el archivo se guarda con un nombre aleatorio y se sirve con `X-Content-Type-Options: nosniff`.
+- **Errores sin detalles internos:** cada ruta tiene su `try/catch`; en un error imprevisto se loguea en la consola y al cliente le llega un 500 genérico.
+- **Sin secretos en el código:** la configuración va en el `.env`, que no se versiona (`.env.example` sí).
+
 ## Pruebas
 
 ```bash
 npm test
 ```
 
-Corre `scripts/probar.sh`, que prueba la API con `curl`:
+Corre `scripts/probar.sh`, que prueba la API con `curl` (más de 250 chequeos):
 
-1. Resetea su propia base, `test.db`, con `npm run db:reset` (la borra, la vuelve a crear y carga los datos del seed). El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. `test.db` está ignorada en git, como todas las `*.db`. Si el script lo corre un agente de IA (por ejemplo, Claude Code), Prisma 7 frena el `--force-reset` y pide que una persona lo confirme: el agente tiene que preguntar y volver a correrlo con `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`. Corrido a mano no pide nada.
+1. Resetea su propia base, `test.db`, con `npm run db:reset`. El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. Si el script lo corre un agente de IA (por ejemplo, Claude Code), Prisma 7 frena el `--force-reset` y pide que una persona lo confirme: el agente tiene que preguntar y volver a correrlo con `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`. Corrido a mano no pide nada.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre). Las fotos que sube van a una carpeta temporal (`UPLOADS_DIR`), no a `uploads/`.
-3. Hace login con Sofía, Lucía y Carlos (contraseña `doggy1234`) y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
-4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido de algunas respuestas (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: subida válida de cada formato, un texto con extensión `.jpg`, una de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
+3. Hace login con Sofía, Lucía y Carlos y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
+4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: cada formato válido, un texto con extensión `.jpg`, uno de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
 5. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
 6. Baja el servidor al terminar.
 
-Necesita `curl` y `sqlite3` (vienen con macOS), el `.env` y las dependencias instaladas. Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, un código de asignación vencido o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`. Para subir un archivo: `subir "<caso>" <status esperado> <archivo>`.
+Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, un código de asignación vencido o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`. Para subir un archivo: `subir "<caso>" <status esperado> <archivo>`.
 
 ## Estructura
 
@@ -200,18 +272,19 @@ doggy-backend/
 ├── prisma/
 │   ├── schema.prisma     modelo de datos
 │   └── seed.ts           datos de ejemplo
-├── prisma.config.ts      configuración de la CLI de Prisma (URL de la base, seed)
+├── prisma.config.ts      configuración de la CLI de Prisma 7 (URL de la base, seed)
 ├── uploads/              fotos subidas (no se versionan, salvo el .gitkeep)
 ├── scripts/
-│   └── probar.sh         pruebas de todos los endpoints con curl (npm test)
+│   ├── probar.sh         pruebas de todos los endpoints con curl (npm test)
+│   └── studio.ts         abre Prisma Studio con la ruta absoluta de la base
 └── src/
-    ├── index.ts          app de Express y montaje de las rutas
-    ├── rutas/            una por recurso (mascotas, registros, turnos, reportes, invitaciones, fotos…)
+    ├── index.ts          app de Express, middlewares y montaje de las rutas
+    ├── rutas/            una por recurso (auth, usuarios, mascotas, registros, turnos, reportes…)
     ├── cuerpos/          lectura y validación del body de cada recurso
     ├── validaciones.ts   reglas de validación, las mismas que la app
     ├── respuestas.ts     conversión de los modelos al JSON que espera la app
     ├── dominio.ts        valores válidos de los campos fijos (roles, estados, categorías, radios)
-    ├── lib/              Prisma, sesiones, permisos, fotos, lectura del request, errores y códigos generados
+    ├── lib/              Prisma, sesiones, permisos, fotos, lectura del request, errores y códigos
     ├── middlewares/      requiereUsuario: lee el token y pone el usuario de la sesión (401 si no hay)
     └── generated/        cliente generado por Prisma (no se versiona)
 ```
