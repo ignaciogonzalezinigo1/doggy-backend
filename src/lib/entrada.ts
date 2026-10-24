@@ -8,7 +8,9 @@
  * en un `Resultado` que la ruta responde como 400.
  */
 
-import { limpiarTexto, LARGO_MAXIMO_FOTO, conCampo } from '../validaciones';
+import { CLAVES_FOTO_SEED, esValorDe } from '../dominio';
+import { limpiarTexto, conCampo } from '../validaciones';
+import { esRutaUpload, existeUpload } from './fotos';
 
 /** Mensaje cuando el id de la URL no es un entero positivo. */
 export const MENSAJE_ID_INVALIDO = 'El id no es válido.';
@@ -116,16 +118,23 @@ export function leerTextoOpcional(
 }
 
 /**
- * Lee una foto: clave local o URI, o null si no tiene.
+ * Lee una foto. Solo acepta una clave de las fotos del seed o la ruta de una
+ * foto subida con POST /api/fotos ("/uploads/<nombre>.jpg") cuyo archivo
+ * exista. Una URI del celular (file://, content://, blob:) se rechaza: es un
+ * archivo temporal que nadie más puede ver.
  * @param valor lo que llegó
  * @param campo nombre del campo
- * @returns la foto o null
+ * @returns la foto o null si no tiene
  */
 export function leerFoto(valor: unknown, campo = 'Foto'): string | null {
   if (valor === undefined || valor === null || valor === '') return null;
   if (typeof valor !== 'string') throw new DatoInvalido(conCampo(campo, 'Tiene que ser un texto.'));
-  if (valor.length > LARGO_MAXIMO_FOTO || /\s/.test(valor)) {
+  if (esValorDe(CLAVES_FOTO_SEED, valor)) return valor;
+  if (!esRutaUpload(valor)) {
     throw new DatoInvalido(conCampo(campo, 'No tiene un formato válido.'));
+  }
+  if (!existeUpload(valor)) {
+    throw new DatoInvalido(conCampo(campo, 'No la encontramos en el servidor. Elegila de nuevo.'));
   }
   return valor;
 }

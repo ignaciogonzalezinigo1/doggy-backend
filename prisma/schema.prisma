@@ -29,7 +29,7 @@ model Usuario {
   email              String   @unique
   /// Barrio y ciudad, por ejemplo "Palermo, Buenos Aires".
   ubicacion          String
-  /// Clave de foto local o URI remota.
+  /// Clave de una foto del seed o ruta de una foto subida ("/uploads/abc.jpg").
   foto               String?
   telefonoEmergencia String
   /// Hash bcrypt de la contraseña. Nunca se devuelve en la API.

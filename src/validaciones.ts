@@ -34,9 +34,6 @@ export const LIMITES = {
   busqueda: 50,
 } as const;
 
-/** Largo máximo de una foto (clave local o URI). No está en la app: es un tope para no guardar cualquier cosa. */
-export const LARGO_MAXIMO_FOTO = 2048;
-
 /** Edad máxima razonable de una mascota, en años. */
 export const EDAD_MAXIMA = 30;
 

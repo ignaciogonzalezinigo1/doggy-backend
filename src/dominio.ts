@@ -37,6 +37,12 @@ export const RADIOS_BUSQUEDA = [200, 500, 1000, 2000] as const;
 /** Etiquetas que puede tener un reporte como máximo (`MAXIMO` de EtiquetasInput en la app). */
 export const MAXIMO_ETIQUETAS = 5;
 
+/**
+ * Claves de las fotos que vienen empaquetadas en la app para los datos de
+ * ejemplo (`FOTOS_LOCALES` de doggy/mobile/src/data/fotos.ts).
+ */
+export const CLAVES_FOTO_SEED = ['luna', 'roco', 'milo', 'simba', 'sin-collar', 'sofia', 'carlos'] as const;
+
 /** Días que dura un código de asignación. */
 export const DIAS_VIGENCIA_INVITACION = 7;
 
