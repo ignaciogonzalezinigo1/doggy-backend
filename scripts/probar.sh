@@ -257,7 +257,7 @@ t "logout sin token" 401 POST /api/auth/logout
 como "$SOFIA"
 t "las otras sesiones de Sofía siguen" 200 GET /api/usuarios/me
 
-seccion "Errores de formato"
+seccion "Errores de formato y rutas inexistentes"
 # express.json() falla antes de llegar a la ruta: el middleware manejarErrores
 # tiene que responder { error } en español, sin la página HTML ni el stack.
 como ""
@@ -271,6 +271,18 @@ v "llega como { error }" sí "$(jok 'typeof r.error === "string"')"
 t "body de más de 100 KB" 413 PATCH /api/usuarios/me "{\"ubicacion\":\"$(head -c 150000 /dev/zero | tr '\0' 'x')\"}"
 v "llega como { error } en español" "Los datos enviados son demasiado grandes." "$(jget .error)"
 t "después de los errores, la API sigue respondiendo" 200 GET /api/usuarios/me
+
+# Rutas que no existen: 404 con { error } en vez de la página HTML de Express.
+t "ruta de la API que no existe" 404 GET /api/noexiste
+v "llega como { error } en español" "No existe esa ruta." "$(jget .error)"
+t "método que no corresponde (PUT, nunca PUT)" 404 PUT /api/mascotas/1 '{"nombre":"Luna"}'
+v "llega como { error }" "No existe esa ruta." "$(jget .error)"
+como ""
+t "ruta de la API que no existe, sin sesión" 401 GET /api/noexiste
+t "ruta fuera de /api" 404 GET /noexiste
+v "llega como { error }" "No existe esa ruta." "$(jget .error)"
+t "foto de /uploads que no existe (pública)" 404 GET "$RUTA_INEXISTENTE"
+v "llega como { error }" "No existe esa ruta." "$(jget .error)"
 
 seccion "Permisos entre usuarios"
 como "$LUCIA"
@@ -317,6 +329,7 @@ subir "JPG válido" 201 "$F_JPG"
 FOTO_A=$(jget .foto)
 v "devuelve una ruta /uploads/ con nombre aleatorio" sí "$(jok '/^\/uploads\/[0-9a-f]{32}\.jpg$/.test(r.foto)')"
 v "el archivo quedó guardado" sí "$(hay_archivo "$FOTO_A")"
+v "la foto subida se sirve pública en /uploads" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$API$FOTO_A")"
 subir "PNG válido" 201 "$F_PNG"
 FOTO_B=$(jget .foto)
 v "se guarda como .png" sí "$(jok 'r.foto.endsWith(".png")')"
