@@ -80,9 +80,9 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 | 401 | sin `Authorization: Bearer`, token inválido, vencido o cerrado con logout; login con email o contraseña incorrectos |
 | 403 | con sesión, pero sin permiso sobre ese recurso |
 | 404 | no existe |
-| 409 | conflicto con el estado actual: email ya registrado, ya asignado a la mascota, único dueño que quiere desasignarse |
+| 409 | conflicto con el estado actual: email ya registrado, ya asignado a la mascota, único dueño que quiere desasignarse, reporte ya cerrado, mascota ya reportada |
 | 410 | código de asignación vencido o ya usado |
-| 413 | la foto subida pesa más de 5 MB |
+| 413 | la foto subida pesa más de 5 MB, o el body JSON más de 100 KB |
 | 500 | error imprevisto |
 
 - Todo error sale como `{ error: "mensaje en español" }`. La app muestra ese mensaje tal cual, así que tiene que ser claro para el usuario final (rioplatense, sin detalles técnicos).
@@ -92,6 +92,8 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 - **Middlewares antes de las rutas:** `cors()` y `express.json()` se registran antes que cualquier ruta en `src/index.ts`.
 - **try/catch en toda ruta async.** En el `catch`, se loguea el error en la consola del servidor y se responde 500 con `{ error: "..." }` genérico, sin filtrar detalles internos.
 - **Errores siempre como `{ error: "mensaje en español" }`**, con el status de la tabla.
+- **Middleware de errores al final** (`src/middlewares/manejarErrores.ts`, después de todas las rutas): atrapa lo que no pasa por el try/catch de una ruta, como un JSON mal formado (400) o un body de más de 100 KB (413) de `express.json()`, y el resto lo responde 500 genérico. Así nunca sale la página HTML de Express con el stack.
+- Si el puerto está ocupado, `app.listen` avisa y termina el proceso (`EADDRINUSE`), en vez de seguir como si escuchara.
 - **Molde de cada ruta:** `parseId` (400) → existe (404) → permiso (403) → leer y validar el body (400) → escribir (P2025 → 404, P2002 → 409) → responder con las funciones de `src/respuestas.ts`. Los helpers están en `src/lib/entrada.ts` (`parseId`, `pick`, lectores de campos), `src/lib/asignaciones.ts` (permisos) y `src/lib/errores.ts`; la lectura del body de cada recurso, en `src/cuerpos/`.
 - **Ids de la URL con `parseId`:** convierte `req.params.id` a entero positivo; si no lo es, 400 antes de tocar la base.
 - **pick del body:** de `req.body` se toman solo los campos permitidos para esa ruta. Nunca se pasa el body entero a Prisma (así no se puede mandar `id`, `tutorId`, `passwordHash`, etc.).

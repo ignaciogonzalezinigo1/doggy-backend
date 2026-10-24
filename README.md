@@ -171,7 +171,7 @@ Las respuestas tienen exactamente la forma de los tipos de `doggy/mobile/src/typ
 | 404 | no existe |
 | 409 | conflicto con el estado actual: email ya registrado, ya asignado, único dueño, reporte ya cerrado o mascota ya reportada |
 | 410 | código de asignación vencido o ya usado |
-| 413 | la foto pesa más de 5 MB |
+| 413 | la foto pesa más de 5 MB, o el body JSON más de 100 KB |
 | 500 | error imprevisto |
 
 ### Fotos
