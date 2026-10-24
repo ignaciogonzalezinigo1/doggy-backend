@@ -2,7 +2,8 @@
  * Configuración de la CLI de Prisma (Prisma 7).
  *
  * Desde Prisma 7 la URL de la base no va en `schema.prisma`: la CLI
- * (`db push`, `generate`, `studio`, `db seed`) la lee de acá. La CLI tampoco
+ * (`db push`, `generate`, `db seed`) la lee de acá. Studio no acepta la URL
+ * relativa: `npm run studio` usa `scripts/studio.ts` (ver el README). La CLI tampoco
  * carga el `.env` sola, por eso se importa `dotenv/config`.
  */
 
