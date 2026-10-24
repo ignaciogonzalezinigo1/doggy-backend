@@ -360,6 +360,23 @@ v "el archivo sigue (lo usa la otra)" sí "$(hay_archivo "$FOTO_C")"
 t "se la saca a la otra" 200 PATCH /api/mascotas/3 '{"foto":null}'
 v "ahora sí se borró" no "$(hay_archivo "$FOTO_C")"
 
+seccion "Mascotas: buscar por código del QR"
+como "$SOFIA"
+t "mascota ajena (Toby, de Lucía)" 200 GET /api/mascotas/codigo/DOGGY-7741-TOBY
+v "es Toby" "4 Toby" "$(jmap 'r.id + " " + r.nombre')"
+v "solo los datos públicos" "codigo,foto,id,nombre,raza,senas" "$(jmap 'Object.keys(r).sort().join()')"
+t "mascota propia (Luna)" 200 GET /api/mascotas/codigo/DOGGY-8492-LUNA
+v "es Luna" 1 "$(jget .id)"
+v "tampoco trae tutorId" sí "$(jok '!("tutorId" in r) && !("edad" in r)')"
+t "en minúsculas y con espacios" 200 GET "/api/mascotas/codigo/%20doggy-7741-toby%20"
+v "lo normaliza" DOGGY-7741-TOBY "$(jget .codigo)"
+t "formato inválido" 400 GET /api/mascotas/codigo/PERRO-12-TOBY
+v "mensaje en español" sí "$(jok 'r.error.includes("DOGGY-XXXX-NOMBRE")')"
+t "código que no existe" 404 GET /api/mascotas/codigo/DOGGY-0000-NADIE
+como ""
+t "sin token" 401 GET /api/mascotas/codigo/DOGGY-7741-TOBY
+como "$SOFIA"
+
 seccion "Registros"
 subir "foto de la etiqueta" 201 "$F_JPG"
 FOTO_ETIQUETA=$(jget .foto)
