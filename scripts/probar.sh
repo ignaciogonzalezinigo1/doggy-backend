@@ -257,6 +257,21 @@ t "logout sin token" 401 POST /api/auth/logout
 como "$SOFIA"
 t "las otras sesiones de Sofía siguen" 200 GET /api/usuarios/me
 
+seccion "Errores de formato"
+# express.json() falla antes de llegar a la ruta: el middleware manejarErrores
+# tiene que responder { error } en español, sin la página HTML ni el stack.
+como ""
+t "JSON mal formado (sin sesión)" 400 POST /api/auth/login '{"email": "sofia.romero@mail.com",'
+v "llega como { error } en español" "Los datos enviados no tienen un formato válido." "$(jget .error)"
+v "sin stack trace" sí "$(jok '!JSON.stringify(r).includes("SyntaxError")')"
+como "$SOFIA"
+t "JSON mal formado (con sesión)" 400 PATCH /api/usuarios/me '{nombre: Sofía}'
+v "llega como { error }" sí "$(jok 'typeof r.error === "string"')"
+# El límite por defecto de express.json() es 100 KB.
+t "body de más de 100 KB" 413 PATCH /api/usuarios/me "{\"ubicacion\":\"$(head -c 150000 /dev/zero | tr '\0' 'x')\"}"
+v "llega como { error } en español" "Los datos enviados son demasiado grandes." "$(jget .error)"
+t "después de los errores, la API sigue respondiendo" 200 GET /api/usuarios/me
+
 seccion "Permisos entre usuarios"
 como "$LUCIA"
 t "perfil con el token de Lucía" 200 GET /api/usuarios/me
