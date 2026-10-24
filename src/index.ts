@@ -9,6 +9,7 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import { manejarErrores } from './middlewares/manejarErrores';
 import { requiereUsuario } from './middlewares/requiereUsuario';
 import { authRouter } from './rutas/auth';
 import { CARPETA_UPLOADS } from './lib/fotos';
@@ -72,10 +73,33 @@ app.use('/api/cuidadores', cuidadoresRouter);
 app.use('/api/invitaciones', invitacionesRouter);
 app.use('/api/fotos', fotosRouter);
 
+// --- Errores (siempre después de las rutas) ---
+
+// JSON mal formado, body demasiado grande o cualquier error sin atrapar:
+// responde { error } en español en vez de la página HTML de Express.
+app.use(manejarErrores);
+
 // --- Servidor ---
 
 const puerto = Number(process.env.PORT) || PUERTO_POR_DEFECTO;
 
-app.listen(puerto, '0.0.0.0', () => {
-  console.log(`API de Doggy escuchando en http://0.0.0.0:${puerto}`);
+/**
+ * Express 5 llama a este callback también cuando no pudo escuchar, con el
+ * error como argumento. Si el puerto está ocupado (casi siempre otro
+ * `npm run dev` abierto), avisa y termina en vez de quedar sin escuchar.
+ */
+app.listen(puerto, '0.0.0.0', (error?: Error) => {
+  if (!error) {
+    console.log(`API de Doggy escuchando en http://0.0.0.0:${puerto}`);
+    return;
+  }
+  if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    console.error(
+      `El puerto ${puerto} ya está en uso: seguramente hay otra API de Doggy (u otro programa) corriendo. ` +
+        'Cerrala o cambiá PORT en el .env (y el puerto de EXPO_PUBLIC_API_URL en la app).',
+    );
+  } else {
+    console.error('No se pudo levantar la API:', error);
+  }
+  process.exit(1);
 });
