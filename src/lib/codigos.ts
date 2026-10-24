@@ -18,6 +18,9 @@ const INTENTOS_MAXIMOS = 50;
 /** Sufijo si el nombre no tiene ninguna letra ni número que sirva. */
 const SUFIJO_POR_DEFECTO = 'MASCOTA';
 
+/** Formato del código de mascota (igual que `CODIGO_MASCOTA_REGEX` de doggy/mobile/src/utils/codigos.ts). */
+export const CODIGO_MASCOTA_REGEX = /^DOGGY-\d{4}-[A-Z0-9]+$/;
+
 /** Caracteres del código de asignación. */
 const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 /** Largo del código de asignación. */
@@ -35,6 +38,16 @@ function normalizarNombre(nombre: string): string {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
   return limpio || SUFIJO_POR_DEFECTO;
+}
+
+/**
+ * Normaliza un código leído de un QR o tipeado: sin espacios alrededor y en mayúsculas.
+ * @param valor código como llegó
+ * @returns el código normalizado, o null si no tiene el formato DOGGY-XXXX-NOMBRE
+ */
+export function normalizarCodigoMascota(valor: string): string | null {
+  const codigo = valor.trim().toUpperCase();
+  return CODIGO_MASCOTA_REGEX.test(codigo) ? codigo : null;
 }
 
 /**

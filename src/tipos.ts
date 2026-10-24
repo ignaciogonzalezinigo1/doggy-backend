@@ -38,6 +38,12 @@ export type MascotaRespuesta = {
   foto: string | null;
 };
 
+/**
+ * Lo que ve de una mascota quien escanea su chapita sin estar asignado: lo
+ * justo para identificarla. Sin `tutorId`, edad ni nada del dueño o del carnet.
+ */
+export type MascotaPublicaRespuesta = Pick<MascotaRespuesta, 'id' | 'nombre' | 'raza' | 'senas' | 'foto' | 'codigo'>;
+
 /** Entrada del carnet sanitario. Las fechas van como AAAA-MM-DD. */
 export type RegistroRespuesta = {
   id: number;

@@ -29,6 +29,7 @@ import type {
 import type {
   CuidadorRespuesta,
   InvitacionRespuesta,
+  MascotaPublicaRespuesta,
   MascotaRespuesta,
   RegistroRespuesta,
   ReporteRespuesta,
@@ -126,6 +127,23 @@ export function aMascota(mascota: Mascota): MascotaRespuesta {
     codigo: mascota.codigo,
     senas: mascota.senas,
     foto: mascota.foto,
+  };
+}
+
+/**
+ * Datos públicos de una mascota, para quien la identifica por el QR de la chapita.
+ * Se arma campo por campo para que nunca se cuele algo más del modelo.
+ * @param mascota mascota leída de la base
+ * @returns id, nombre, raza, señas, foto y código
+ */
+export function aMascotaPublica(mascota: Mascota): MascotaPublicaRespuesta {
+  return {
+    id: mascota.id,
+    nombre: mascota.nombre,
+    raza: mascota.raza,
+    senas: mascota.senas,
+    foto: mascota.foto,
+    codigo: mascota.codigo,
   };
 }
 

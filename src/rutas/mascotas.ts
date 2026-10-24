@@ -1,7 +1,8 @@
 /**
  * Rutas de las mascotas del usuario, y de lo que se crea colgado de una
  * mascota: registros del carnet, códigos de asignación y la desasignación
- * del propio usuario.
+ * del propio usuario. También la búsqueda por el código del QR, que es la
+ * única que deja ver (solo los datos públicos de) una mascota ajena.
  */
 
 import { Router } from 'express';
@@ -15,12 +16,12 @@ import {
   mascotasAsignadasA,
   rolEn,
 } from '../lib/asignaciones';
-import { generarCodigoMascota, generarToken } from '../lib/codigos';
+import { generarCodigoMascota, generarToken, normalizarCodigoMascota } from '../lib/codigos';
 import { DatoInvalido, leerCuerpo, MENSAJE_ID_INVALIDO, parseId, pick } from '../lib/entrada';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
 import { borrarFotoSiHuerfana } from '../lib/fotos';
 import { prisma } from '../lib/prisma';
-import { aInvitacion, aMascota, aRegistro, INCLUIR_MASCOTA_INVITACION } from '../respuestas';
+import { aInvitacion, aMascota, aMascotaPublica, aRegistro, INCLUIR_MASCOTA_INVITACION } from '../respuestas';
 
 export const mascotasRouter = Router();
 
@@ -31,6 +32,8 @@ const DIA_MS = 24 * 60 * 60 * 1000;
 
 const MENSAJE_NO_ASIGNADO = 'No estás asignado a esta mascota.';
 const MENSAJE_UNICO_DUENO = 'Sos el único dueño. Asigná a otra persona como dueña antes de irte.';
+const MENSAJE_CODIGO_INVALIDO = 'Ese código no es de una chapita Doggy (DOGGY-XXXX-NOMBRE).';
+const MENSAJE_CODIGO_NO_EXISTE = 'No hay ninguna mascota registrada con ese código.';
 
 /**
  * GET /api/mascotas: mascotas a las que está asignado el usuario (como dueño o
@@ -45,6 +48,33 @@ mascotasRouter.get('/', async (req, res) => {
     res.json(mascotas.map(aMascota));
   } catch (error) {
     responderErrorInterno(res, error, 'GET /api/mascotas');
+  }
+});
+
+/**
+ * GET /api/mascotas/codigo/:codigo: busca una mascota por el código del QR de
+ * su chapita. La usa quien encontró un perro, que casi nunca está asignado a
+ * él, así que no se chequea la asignación pero se responden solo los datos
+ * públicos para identificarla (`aMascotaPublica`). Acepta el código en
+ * minúsculas o con espacios alrededor.
+ * Responde 200 con MascotaPublica, 400 si no tiene el formato
+ * DOGGY-XXXX-NOMBRE, 404 si no existe o 500.
+ */
+mascotasRouter.get('/codigo/:codigo', async (req, res) => {
+  const codigo = normalizarCodigoMascota(req.params.codigo);
+  if (codigo === null) {
+    responderError(res, 400, MENSAJE_CODIGO_INVALIDO);
+    return;
+  }
+  try {
+    const mascota = await prisma.mascota.findUnique({ where: { codigo } });
+    if (!mascota) {
+      responderError(res, 404, MENSAJE_CODIGO_NO_EXISTE);
+      return;
+    }
+    res.json(aMascotaPublica(mascota));
+  } catch (error) {
+    responderErrorInterno(res, error, 'GET /api/mascotas/codigo/:codigo');
   }
 });
 
