@@ -35,6 +35,7 @@ Lo que sigue lo tienen que respetar los dos repos. **Si algo del contrato cambia
 | Reportes | `GET /api/reportes`, `POST /api/reportes`, `PATCH /api/reportes/:id` (también para cerrarlo) |
 | Cuidadores | `GET /api/cuidadores`, `DELETE /api/mascotas/:id/cuidadores/me` |
 | Invitaciones | `POST /api/mascotas/:id/invitaciones`, `GET /api/invitaciones/:token`, `POST /api/invitaciones/:token/aceptar` |
+| Fotos | `POST /api/fotos` (multipart), `GET /uploads/<nombre>` (público) |
 
 Además, `GET /api/health` → `{ ok: true }` para chequear que el servidor está levantado.
 
@@ -46,6 +47,15 @@ Además, `GET /api/health` → `{ ok: true }` para chequear que el servidor est�
 - **Para borrar un opcional en un PATCH se manda `null`** (`proximaDosis`, `fotoEtiqueta`, `infoAdicional`, `foto`). Un campo que no viene no se toca; ojo que `JSON.stringify` descarta los `undefined`.
 - **Permisos:** solo se escribe sobre mascotas a las que el usuario está asignado, como dueño o invitado (403 si no). Generar códigos de asignación es solo para dueños. Excepción: un reporte `encontrado` puede llevar el `mascotaId` de una mascota ajena (la que identificó el QR); solo se chequea que exista.
 - Una mascota tiene como mucho un reporte `perdido` activo (409 si ya tiene uno).
+
+### Fotos
+
+- **`POST /api/fotos`** (con token): `multipart/form-data` con el archivo en el campo `foto` → 201 `{ foto: "/uploads/<nombre>.jpg" }`. 400 si no vino el archivo o no es JPG, PNG ni WEBP; 413 si pesa más de 5 MB. El tipo se valida por la firma del archivo (primeros bytes), no por el nombre ni el mimetype. El nombre es aleatorio (32 hex).
+- **`GET /uploads/<nombre>`** es público (sin token), con `express.static`, para que `Image` cargue la foto sin headers. Se registra antes de `requiereUsuario`.
+- **En la base se guarda la ruta relativa** (`/uploads/abc.jpg`), nunca la URL completa, porque la IP de la PC cambia. La app la convierte en `API_URL + foto` (`fuenteFoto` en `doggy/mobile/src/data/fotos.ts`).
+- **Los campos de foto** (`foto` de mascota, usuario y reporte; `fotoEtiqueta` de registro) solo aceptan `null`, una clave del seed (`CLAVES_FOTO_SEED` de `src/dominio.ts`, iguales a `FOTOS_LOCALES` de la app) o una ruta `/uploads/` cuyo archivo exista (`leerFoto`). Una URI del celular (`file://`, `content://`, `blob:`) da 400: la app tiene que subirla antes.
+- **Archivos huérfanos:** al reemplazar o borrar una foto (PATCH con otra foto o `null`, `DELETE` de un registro, registro que deja de ser vacuna) se llama a `borrarFotoSiHuerfana` (`src/lib/fotos.ts`) después de escribir: borra el archivo solo si ninguna columna de foto lo usa. Cerrar un reporte no borra su foto (queda como historial). Las fotos subidas que nunca se guardaron en un registro quedan en la carpeta.
+- Los archivos van a `uploads/` (ignorada en git salvo `.gitkeep`) o a `UPLOADS_DIR`; `npm test` usa una carpeta temporal.
 
 ### Sesión
 
@@ -71,6 +81,7 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 | 404 | no existe |
 | 409 | conflicto con el estado actual: email ya registrado, ya asignado a la mascota, único dueño que quiere desasignarse |
 | 410 | código de asignación vencido o ya usado |
+| 413 | la foto subida pesa más de 5 MB |
 | 500 | error imprevisto |
 
 - Todo error sale como `{ error: "mensaje en español" }`. La app muestra ese mensaje tal cual, así que tiene que ser claro para el usuario final (rioplatense, sin detalles técnicos).
@@ -132,7 +143,7 @@ Algunos campos no se guardan con la misma forma con la que viajan. La ruta los t
 
 - Commits chicos, uno por unidad lógica, con mensajes en español, cortos, en imperativo, variados y descriptivos. Nada de mensajes genéricos repetidos. Sin trailers `Co-Authored-By`.
 - No cambiar `git config` ni hacer push salvo que se pida.
-- Se ignoran `node_modules/`, `.env`, la base (`*.db`) y el cliente generado (`src/generated/`).
+- Se ignoran `node_modules/`, `.env`, la base (`*.db`), el cliente generado (`src/generated/`) y las fotos subidas (`uploads/*`, salvo `.gitkeep`).
 
 ## Antes de dar algo por terminado
 
