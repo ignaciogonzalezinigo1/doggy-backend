@@ -11,7 +11,9 @@ import cors from 'cors';
 import express from 'express';
 import { requiereUsuario } from './middlewares/requiereUsuario';
 import { authRouter } from './rutas/auth';
+import { CARPETA_UPLOADS } from './lib/fotos';
 import { cuidadoresRouter } from './rutas/cuidadores';
+import { fotosRouter } from './rutas/fotos';
 import { invitacionesRouter } from './rutas/invitaciones';
 import { mascotasRouter } from './rutas/mascotas';
 import { registrosRouter } from './rutas/registros';
@@ -41,6 +43,20 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * GET /uploads/<nombre>: fotos subidas. Son públicas (sin token) para que el
+ * componente Image de la app las pueda cargar sin headers. `nosniff` evita
+ * que el navegador interprete un archivo como otra cosa que una imagen.
+ */
+app.use(
+  '/uploads',
+  express.static(CARPETA_UPLOADS, {
+    index: false,
+    dotfiles: 'ignore',
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  }),
+);
+
 // Registro y login son públicos; logout pide sesión adentro del router.
 app.use('/api/auth', authRouter);
 
@@ -54,6 +70,7 @@ app.use('/api/turnos', turnosRouter);
 app.use('/api/reportes', reportesRouter);
 app.use('/api/cuidadores', cuidadoresRouter);
 app.use('/api/invitaciones', invitacionesRouter);
+app.use('/api/fotos', fotosRouter);
 
 // --- Servidor ---
 

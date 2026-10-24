@@ -8,6 +8,10 @@ node_modules/
 *.db
 *.db-journal
 
+# Fotos subidas (se versiona solo la carpeta)
+uploads/*
+!uploads/.gitkeep
+
 # Cliente de Prisma generado (npx prisma generate)
 src/generated/
 
