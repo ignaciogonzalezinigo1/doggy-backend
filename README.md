@@ -46,7 +46,7 @@ carpeta-de-trabajo/
 
 ### Usuarios de prueba
 
-El seed carga los mismos datos que la app tiene de ejemplo (`doggy/mobile/src/data/mock.ts`), con los mismos ids. **Todos los usuarios tienen la contraseña `doggy1234`.**
+El seed (`prisma/seed.ts`) carga los datos de ejemplo de la demo; es la única fuente de esos datos, porque la app ya no tiene datos propios. Las fotos usan las claves de las imágenes empaquetadas en la app (`luna`, `sofia`, …). **Todos los usuarios tienen la contraseña `doggy1234`.**
 
 | Usuario | Email | Para qué sirve |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ El seed carga los mismos datos que la app tiene de ejemplo (`doggy/mobile/src/da
 | Valentina Pérez | `valentina.perez@mail.com` | Autora del reporte del perro encontrado en Belgrano |
 | Julián Fernández | `julian.fernandez@mail.com` | Autor del reporte de Nieve (perdida) |
 
-Las fechas de los reportes se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido; turnos, registros y la invitación tienen fechas fijas, como en la app.
+Las fechas de los reportes y los turnos se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido y los turnos no quedan viejos; los registros del carnet y la invitación tienen fechas fijas.
 
 ### Resetear la base
 
@@ -69,6 +69,16 @@ npm run db:reset
 ```
 
 Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y carga el seed. Sirve para volver a la demo limpia o después de cambiar el schema de forma incompatible. Para recargar solo los datos sin tocar las tablas: `npm run db:seed` (borra los datos y los vuelve a cargar).
+
+### Prisma Studio
+
+```bash
+npm run studio
+```
+
+Abre Prisma Studio en `http://localhost:5555` con la base del `.env`. Se puede cambiar el puerto con `npm run studio -- --port 5556`.
+
+No se usa `npx prisma studio` directo: con Prisma 7.10 responde *"Prisma Studio is not supported for the file:./dev.db protocol"*. Studio sí soporta SQLite, pero la CLI saca el protocolo cortando la URL en `://`, y `file:./dev.db` no lo tiene. Con una ruta absoluta (`file:///…/dev.db`) funciona, pero esa ruta cambia en cada PC y no puede ir en el `.env`. Por eso `npm run studio` corre `scripts/studio.ts`, que arma la URL absoluta a partir de `DATABASE_URL` y se la pasa a `prisma studio --url`. Probado en macOS; en Windows la ruta con `C:\` podría no pasar el mismo parseo.
 
 ### Variables de entorno
 
@@ -86,7 +96,7 @@ Borra `dev.db`, la vuelve a crear con el schema actual, regenera el cliente y ca
 | `npm run db:init` | Aplica el schema a la base (`prisma db push`) y genera el cliente |
 | `npm run db:seed` | Carga los datos de ejemplo |
 | `npm run db:reset` | Borra la base, la vuelve a crear y carga los datos de ejemplo |
-| `npm run studio` | Abre Prisma Studio para ver y editar la base |
+| `npm run studio` | Abre Prisma Studio para ver y editar la base (ver [Prisma Studio](#prisma-studio)) |
 | `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
 
 ## Endpoints
@@ -174,7 +184,7 @@ npm test
 
 Corre `scripts/probar.sh`, que prueba la API con `curl`:
 
-1. Resetea su propia base, `test.db`, con `npm run db:reset` (la borra, la vuelve a crear y carga los datos del seed). El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. `test.db` está ignorada en git, como todas las `*.db`.
+1. Resetea su propia base, `test.db`, con `npm run db:reset` (la borra, la vuelve a crear y carga los datos del seed). El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. `test.db` está ignorada en git, como todas las `*.db`. Si el script lo corre un agente de IA (por ejemplo, Claude Code), Prisma 7 frena el `--force-reset` y pide que una persona lo confirme: el agente tiene que preguntar y volver a correrlo con `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`. Corrido a mano no pide nada.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre). Las fotos que sube van a una carpeta temporal (`UPLOADS_DIR`), no a `uploads/`.
 3. Hace login con Sofía, Lucía y Carlos (contraseña `doggy1234`) y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
 4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido de algunas respuestas (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: subida válida de cada formato, un texto con extensión `.jpg`, una de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
