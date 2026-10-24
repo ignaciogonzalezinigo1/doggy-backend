@@ -1,7 +1,8 @@
 #!/bin/bash
 # Pruebas de la API de Doggy con curl.
 #
-# Resetea una base aparte (test.db) con los datos del seed, levanta el servidor en el puerto 3001,
+# Resetea una base aparte (test.db) con los datos del seed, levanta el servidor en el puerto 3001
+# con una carpeta de fotos temporal (no ensucia uploads/),
 # hace login con usuarios del seed (contraseña doggy1234) y usa sus tokens,
 # prueba todos los endpoints (también sus casos de error) y muestra una tabla
 # con el endpoint, el caso, el status esperado y el obtenido. Además chequea
@@ -64,6 +65,9 @@ export DATABASE_URL="file:./test.db"
 if curl -s -o /dev/null "$API/api/health"; then
   abortar "ya hay algo escuchando en el puerto $PUERTO. Bajalo y volvé a correr las pruebas."
 fi
+
+# Las fotos subidas en las pruebas van a una carpeta temporal, que se borra al terminar.
+export UPLOADS_DIR="$TMP/uploads"
 
 echo "Reseteando la base de pruebas ($DB)…"
 npm run db:reset > "$TMP/reset.log" 2>&1 || { cat "$TMP/reset.log" >&2; abortar "no se pudo resetear la base."; }
@@ -133,6 +137,20 @@ vencer_ultima_sesion() {
   sqlite3 "$DB" "update Sesion set vence = '$(date -u -v-1H +%Y-%m-%dT%H:%M:%S.000+00:00)' where id = (select max(id) from Sesion);"
 }
 
+# Sube un archivo a POST /api/fotos: subir <caso> <esperado> <archivo> [campo]
+# La respuesta queda en $LAST, como con `t`.
+subir() {
+  local caso="$1" esperado="$2" archivo="$3" campo="${4:-foto}" status
+  local args=(-s -o "$OUT" -w '%{http_code}' -X POST -F "$campo=@$archivo")
+  [ -n "$TOKEN" ] && args+=(-H "Authorization: Bearer $TOKEN")
+  status=$(curl "${args[@]}" "$API/api/fotos")
+  LAST=$(cat "$OUT")
+  fila http "POST /api/fotos" "$caso" "$esperado" "$status" "$(resumen)"
+}
+
+# Responde "sí" si el archivo de una ruta /uploads/... está en la carpeta de fotos.
+hay_archivo() { [ -f "$UPLOADS_DIR/$(basename "$1")" ] && echo sí || echo no; }
+
 # Inserta en la base un reporte activo de otro autor y devuelve su id.
 # Uso: reporte_de <autorId> <mascotaId> <estado> <nombre>
 reporte_de() {
@@ -152,6 +170,18 @@ sqlite3 "$DB" "insert into RegistroSanitario (mascotaId,tipo,nombre,fecha,profes
 TOBY_REG=$(sqlite3 "$DB" "select max(id) from RegistroSanitario;")
 sqlite3 "$DB" "insert into Turno (mascotaId,categoria,fecha,motivo,lugar) values (4,'veterinario','$(date -u -v+5d +%Y-%m-%dT15:00:00.000+00:00)','Control','Vet. Centro');"
 TOBY_TUR=$(sqlite3 "$DB" "select max(id) from Turno;")
+
+# Archivos para las pruebas de fotos: imágenes mínimas con la firma de cada
+# formato, un texto con extensión .jpg y una foto de más de 5 MB.
+F_JPG="$TMP/perro.jpg"; F_PNG="$TMP/perro.png"; F_WEBP="$TMP/perro.webp"
+F_TXT="$TMP/trucho.jpg"; F_GRANDE="$TMP/grande.jpg"
+printf '\xff\xd8\xff\xe0foto' > "$F_JPG"
+printf '\x89PNG\r\n\x1a\nfoto' > "$F_PNG"
+printf 'RIFF\x10\x00\x00\x00WEBPVP8 ' > "$F_WEBP"
+echo "no soy una foto" > "$F_TXT"
+{ printf '\xff\xd8\xff\xe0'; head -c $((5 * 1024 * 1024 + 1)) /dev/zero; } > "$F_GRANDE"
+# Ruta con el formato correcto pero sin archivo.
+RUTA_INEXISTENTE="/uploads/$(printf '0%.0s' $(seq 32)).jpg"
 
 # Sesiones de los usuarios del seed que se usan en las pruebas.
 SOFIA=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
@@ -264,6 +294,30 @@ v "los 3 del seed, con etiquetas como lista" sí "$(jok 'r.length === 3 && r.eve
 t "cuidadores de las mascotas asignadas" 200 GET /api/cuidadores
 v "con nombre armado desde el usuario" sí "$(jok 'r.some((c) => c.nombre === "Sofía Romero")')"
 
+seccion "Fotos"
+como ""
+subir "sin token" 401 "$F_JPG"
+como "$SOFIA"
+subir "JPG válido" 201 "$F_JPG"
+FOTO_A=$(jget .foto)
+v "devuelve una ruta /uploads/ con nombre aleatorio" sí "$(jok '/^\/uploads\/[0-9a-f]{32}\.jpg$/.test(r.foto)')"
+v "el archivo quedó guardado" sí "$(hay_archivo "$FOTO_A")"
+subir "PNG válido" 201 "$F_PNG"
+FOTO_B=$(jget .foto)
+v "se guarda como .png" sí "$(jok 'r.foto.endsWith(".png")')"
+subir "WEBP válido" 201 "$F_WEBP"
+FOTO_C=$(jget .foto)
+subir "texto con extensión .jpg" 400 "$F_TXT"
+v "mensaje en español" "La foto tiene que ser JPG, PNG o WEBP." "$(jget .error)"
+subir "más de 5 MB" 413 "$F_GRANDE"
+v "mensaje en español" "La foto puede pesar hasta 5 MB." "$(jget .error)"
+subir "en otro campo del multipart" 400 "$F_JPG" imagen
+t "sin archivo" 400 POST /api/fotos
+como ""
+t "la foto se ve sin token" 200 GET "$FOTO_A"
+t "foto que no existe" 404 GET "$RUTA_INEXISTENTE"
+como "$SOFIA"
+
 seccion "Usuario"
 t "datos válidos" 200 PATCH /api/usuarios/me '{"ubicacion":"Palermo, CABA","telefonoEmergencia":"+54 11 5555-1234","passwordHash":"x"}'
 t "email en mayúsculas" 200 PATCH /api/usuarios/me '{"email":" Sofia.Romero@MAIL.com "}'
@@ -272,6 +326,15 @@ t "nombre con números" 400 PATCH /api/usuarios/me '{"nombre":"Sofi4"}'
 t "teléfono corto" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"123"}'
 t "body vacío" 400 PATCH /api/usuarios/me '{}'
 t "email de otra cuenta" 409 PATCH /api/usuarios/me '{"email":"lucia.gomez@mail.com"}'
+t "foto con URI del celular" 400 PATCH /api/usuarios/me '{"foto":"file:///var/mobile/perro.jpg"}'
+t "foto con ruta que no existe" 400 PATCH /api/usuarios/me "{\"foto\":\"$RUTA_INEXISTENTE\"}"
+t "foto con ruta fuera de /uploads/" 400 PATCH /api/usuarios/me '{"foto":"/uploads/../.env"}'
+t "foto subida" 200 PATCH /api/usuarios/me "{\"foto\":\"$FOTO_A\"}"
+v "guarda la ruta relativa" "$FOTO_A" "$(jget .foto)"
+t "reemplaza la foto" 200 PATCH /api/usuarios/me "{\"foto\":\"$FOTO_B\"}"
+v "se borró el archivo viejo" no "$(hay_archivo "$FOTO_A")"
+t "vuelve a la foto del seed" 200 PATCH /api/usuarios/me '{"foto":"sofia"}'
+v "se borró la foto subida" no "$(hay_archivo "$FOTO_B")"
 
 seccion "Mascotas"
 t "alta válida" 201 POST /api/mascotas '{"nombre":"Ñandú","raza":"Mestizo","edad":2,"senas":"Mancha blanca en el pecho","foto":null,"codigo":"HACK","tutorId":99}'
@@ -289,12 +352,23 @@ v "el código no cambia" "$CODIGO" "$(jget .codigo)"
 t "id inválido" 400 PATCH /api/mascotas/abc '{"nombre":"Pampa"}'
 t "mascota ajena (Toby)" 403 PATCH /api/mascotas/4 '{"nombre":"Pampa"}'
 t "no existe" 404 PATCH /api/mascotas/9999 '{"nombre":"Pampa"}'
+t "foto con URI de Android" 400 PATCH /api/mascotas/$NUEVA '{"foto":"content://media/1"}'
+t "foto subida" 200 PATCH /api/mascotas/$NUEVA "{\"foto\":\"$FOTO_C\"}"
+t "otra mascota con la misma foto" 200 PATCH /api/mascotas/3 "{\"foto\":\"$FOTO_C\"}"
+t "le saca la foto a la primera" 200 PATCH /api/mascotas/$NUEVA '{"foto":null}'
+v "el archivo sigue (lo usa la otra)" sí "$(hay_archivo "$FOTO_C")"
+t "se la saca a la otra" 200 PATCH /api/mascotas/3 '{"foto":null}'
+v "ahora sí se borró" no "$(hay_archivo "$FOTO_C")"
 
 seccion "Registros"
-t "alta válida con refuerzo" 201 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(date -v+1y +%Y-%m-%d)\",\"fotoEtiqueta\":\"etiqueta-1\",\"mascotaId\":4}"
+subir "foto de la etiqueta" 201 "$F_JPG"
+FOTO_ETIQUETA=$(jget .foto)
+t "alta válida con refuerzo" 201 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(date -v+1y +%Y-%m-%d)\",\"fotoEtiqueta\":\"$FOTO_ETIQUETA\",\"mascotaId\":4}"
 REG=$(jget .id)
+v "guarda la foto de la etiqueta" "$FOTO_ETIQUETA" "$(jget .fotoEtiqueta)"
 v "fecha como AAAA-MM-DD" "$HOY" "$(jget .fecha)"
 v "mascota de la URL, no la del body" 1 "$(jget .mascotaId)"
+t "etiqueta con URI del navegador" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"fotoEtiqueta\":\"blob:http://localhost:8081/abc\"}"
 t "fecha futura" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$MANANA\",\"profesional\":\"Vet. San Roque\"}"
 t "fecha de hace 31 años" 400 POST /api/mascotas/1/registros '{"tipo":"vacuna","nombre":"Antirrábica","fecha":"1990-01-01","profesional":"Vet. San Roque"}'
 t "día inexistente" 400 POST /api/mascotas/1/registros '{"tipo":"vacuna","nombre":"Antirrábica","fecha":"2026-02-31","profesional":"Vet. San Roque"}'
@@ -307,12 +381,17 @@ t "saca el refuerzo con null" 200 PATCH /api/registros/$REG '{"proximaDosis":nul
 v "proximaDosis se omite" sí "$(jok '!("proximaDosis" in r)')"
 t "pasa a 'otro'" 200 PATCH /api/registros/$REG '{"tipo":"otro"}'
 v "se borra la foto de la etiqueta" sí "$(jok '!("fotoEtiqueta" in r)')"
-t "foto de etiqueta en 'otro'" 400 PATCH /api/registros/$REG '{"fotoEtiqueta":"x"}'
+v "y su archivo" no "$(hay_archivo "$FOTO_ETIQUETA")"
+subir "otra foto de etiqueta" 201 "$F_PNG"
+FOTO_ETIQUETA=$(jget .foto)
+t "foto de etiqueta en 'otro'" 400 PATCH /api/registros/$REG "{\"fotoEtiqueta\":\"$FOTO_ETIQUETA\"}"
+t "vuelve a vacuna con foto" 200 PATCH /api/registros/$REG "{\"tipo\":\"vacuna\",\"fotoEtiqueta\":\"$FOTO_ETIQUETA\"}"
 t "id inválido" 400 PATCH /api/registros/0 '{"nombre":"Quíntuple"}'
 t "registro de mascota ajena" 403 PATCH /api/registros/$TOBY_REG '{"nombre":"Quíntuple"}'
 t "no existe" 404 PATCH /api/registros/9999 '{"nombre":"Quíntuple"}'
 t "borrar de mascota ajena" 403 DELETE /api/registros/$TOBY_REG
 t "borrar" 204 DELETE /api/registros/$REG
+v "se borró el archivo de la etiqueta" no "$(hay_archivo "$FOTO_ETIQUETA")"
 t "borrar otra vez" 404 DELETE /api/registros/$REG
 
 seccion "Turnos"
@@ -352,6 +431,7 @@ t "etiquetas repetidas" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mas
 t "6 etiquetas" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[\"Uno\",\"Dos\",\"Tres\",\"Cuatro\",\"Cinco\",\"Seis\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 t "latitud fuera de rango" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-134.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 t "fecha futura" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$FUT_ISO\"}"
+t "foto con URI del celular" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":\"file:///tmp/perro.jpg\",\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 t "reemplaza etiquetas y radio, borra info" 200 PATCH /api/reportes/$REP '{"etiquetas":["Arnés rojo"],"radioMetros":1000,"infoAdicional":null,"estado":"encontrado"}'
 v "el estado no cambia" perdido "$(jget .estado)"
 v "etiquetas reemplazadas" "Arnés rojo" "$(jget .etiquetas)"
