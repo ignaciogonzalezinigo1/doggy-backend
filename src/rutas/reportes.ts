@@ -14,6 +14,7 @@ import { leerCambiosReporte, leerReporteNuevo } from '../cuerpos/reporte';
 import { MENSAJE_MASCOTA_NO_EXISTE, MENSAJE_SIN_PERMISO_MASCOTA, rolEn } from '../lib/asignaciones';
 import { MENSAJE_ID_INVALIDO, parseId } from '../lib/entrada';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
+import { borrarFotoSiHuerfana } from '../lib/fotos';
 import { prisma } from '../lib/prisma';
 import { aReporte, INCLUIR_ETIQUETAS } from '../respuestas';
 
@@ -176,6 +177,7 @@ reportesRouter.patch('/:id', async (req, res) => {
       },
       include: INCLUIR_ETIQUETAS,
     });
+    await borrarFotoSiHuerfana(actual.foto, reporte.foto);
     res.json(aReporte(reporte));
   } catch (error) {
     if (esErrorPrisma(error, 'P2025')) {

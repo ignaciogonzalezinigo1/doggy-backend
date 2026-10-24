@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { leerCambiosUsuario } from '../cuerpos/usuario';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
+import { borrarFotoSiHuerfana } from '../lib/fotos';
 import { prisma } from '../lib/prisma';
 import { aUsuario } from '../respuestas';
 
@@ -47,11 +48,13 @@ usuariosRouter.patch('/me', async (req, res) => {
       responderError(res, 400, cambios.error);
       return;
     }
+    const anterior = await prisma.usuario.findUnique({ where: { id: req.usuarioId }, select: { foto: true } });
     const usuario = await prisma.usuario.update({
       where: { id: req.usuarioId },
       data: cambios.datos,
       omit: { passwordHash: true },
     });
+    await borrarFotoSiHuerfana(anterior?.foto, usuario.foto);
     res.json(aUsuario(usuario));
   } catch (error) {
     if (esErrorPrisma(error, 'P2025')) {

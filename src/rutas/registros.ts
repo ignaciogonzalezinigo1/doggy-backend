@@ -8,6 +8,7 @@ import { leerCambiosRegistro } from '../cuerpos/registro';
 import { buscarDeMascotaAsignada, deMascotasAsignadasA } from '../lib/asignaciones';
 import { MENSAJE_ID_INVALIDO, parseId } from '../lib/entrada';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
+import { borrarFotoSiHuerfana } from '../lib/fotos';
 import { prisma } from '../lib/prisma';
 import { aRegistro } from '../respuestas';
 
@@ -71,6 +72,7 @@ registrosRouter.patch('/:id', async (req, res) => {
       return;
     }
     const registro = await prisma.registroSanitario.update({ where: { id }, data: cambios.datos });
+    await borrarFotoSiHuerfana(encontrado.valor.fotoEtiqueta, registro.fotoEtiqueta);
     res.json(aRegistro(registro));
   } catch (error) {
     if (esErrorPrisma(error, 'P2025')) {
@@ -99,6 +101,7 @@ registrosRouter.delete('/:id', async (req, res) => {
       return;
     }
     await prisma.registroSanitario.delete({ where: { id } });
+    await borrarFotoSiHuerfana(encontrado.valor.fotoEtiqueta);
     res.status(204).end();
   } catch (error) {
     if (esErrorPrisma(error, 'P2025')) {

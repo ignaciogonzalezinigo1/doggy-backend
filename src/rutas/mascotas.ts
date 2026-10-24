@@ -18,6 +18,7 @@ import {
 import { generarCodigoMascota, generarToken } from '../lib/codigos';
 import { DatoInvalido, leerCuerpo, MENSAJE_ID_INVALIDO, parseId, pick } from '../lib/entrada';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
+import { borrarFotoSiHuerfana } from '../lib/fotos';
 import { prisma } from '../lib/prisma';
 import { aInvitacion, aMascota, aRegistro, INCLUIR_MASCOTA_INVITACION } from '../respuestas';
 
@@ -101,7 +102,9 @@ mascotasRouter.patch('/:id', async (req, res) => {
       responderError(res, 400, cambios.error);
       return;
     }
+    const anterior = await prisma.mascota.findUnique({ where: { id }, select: { foto: true } });
     const mascota = await prisma.mascota.update({ where: { id }, data: cambios.datos });
+    await borrarFotoSiHuerfana(anterior?.foto, mascota.foto);
     res.json(aMascota(mascota));
   } catch (error) {
     if (esErrorPrisma(error, 'P2025')) {
