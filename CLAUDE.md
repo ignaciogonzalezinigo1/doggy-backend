@@ -119,7 +119,7 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 
 - **Después de cambiar `prisma/schema.prisma`, correr `npx prisma generate`** (o `npm run db:init`, que aplica el schema con `db push` y genera el cliente). En Prisma 7, `db push` no genera el cliente solo.
 - Los modelos siguen los tipos de `models.ts` (mismos nombres de campo). Las enumeraciones (`tipo`, `categoria`, `estado`, `rol`) se guardan como `String` y se validan en Express contra las listas de `src/dominio.ts` (con `esValorDe`).
-- Los datos de ejemplo van en `prisma/seed.ts`, con los mismos datos e ids que `doggy/mobile/src/data/mock.ts`. Contraseña de todos los usuarios de prueba: `doggy1234`.
+- Los datos de ejemplo van en `prisma/seed.ts`, que es su única fuente (la app no tiene datos propios). Las fotos del seed usan las claves de `CLAVES_FOTO_SEED`. Contraseña de todos los usuarios de prueba: `doggy1234`.
 
 ### Del modelo a la respuesta
 

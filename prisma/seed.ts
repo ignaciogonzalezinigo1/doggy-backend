@@ -30,7 +30,7 @@ const SOFIA_ID = 1;
 const LUCIA_ID = 20;
 
 /**
- * Fecha de hace una cantidad de horas, como `haceHoras` del mock.
+ * Fecha de hace una cantidad de horas (para que los reportes digan "hace 2 h").
  * @param horas horas hacia atrás desde ahora
  * @returns la fecha
  */
