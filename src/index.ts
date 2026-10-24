@@ -9,7 +9,7 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
-import { manejarErrores } from './middlewares/manejarErrores';
+import { manejarErrores, rutaInexistente } from './middlewares/manejarErrores';
 import { requiereUsuario } from './middlewares/requiereUsuario';
 import { authRouter } from './rutas/auth';
 import { CARPETA_UPLOADS } from './lib/fotos';
@@ -74,6 +74,11 @@ app.use('/api/invitaciones', invitacionesRouter);
 app.use('/api/fotos', fotosRouter);
 
 // --- Errores (siempre después de las rutas) ---
+
+// Ninguna ruta respondió: una ruta que no existe, un método que no corresponde
+// (por ejemplo, PUT) o un archivo de /uploads que no está (express.static deja
+// pasar los que no encuentra). Las de /api sin token ya respondieron 401.
+app.use(rutaInexistente);
 
 // JSON mal formado, body demasiado grande o cualquier error sin atrapar:
 // responde { error } en español en vez de la página HTML de Express.

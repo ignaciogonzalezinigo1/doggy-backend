@@ -1,6 +1,6 @@
 /**
- * Middleware de errores de Express. Va al final de `src/index.ts`, después de
- * todas las rutas.
+ * Middlewares del final de `src/index.ts`, después de todas las rutas: el 404
+ * de las rutas que no existen y el manejador de errores.
  *
  * Atrapa lo que no pasa por el try/catch de una ruta, sobre todo los errores
  * de `express.json()`: un body que no es JSON válido o que pesa más de lo
@@ -19,6 +19,7 @@ const STATUS_ERROR_INTERNO = 500;
 const MENSAJE_JSON_INVALIDO = 'Los datos enviados no tienen un formato válido.';
 const MENSAJE_BODY_MUY_GRANDE = 'Los datos enviados son demasiado grandes.';
 const MENSAJE_PEDIDO_INVALIDO = 'No pudimos leer los datos enviados.';
+const MENSAJE_RUTA_INEXISTENTE = 'No existe esa ruta.';
 
 /** Forma de los errores de `express.json()` (body-parser) que nos interesan. */
 type ErrorDeBody = { type?: unknown; status?: unknown };
@@ -43,6 +44,16 @@ function esErrorDelCliente(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const { status } = error as ErrorDeBody;
   return typeof status === 'number' && status >= 400 && status < 500;
+}
+
+/**
+ * Responde 404 con `{ error }` cuando ninguna ruta atendió el pedido. Va
+ * después de todas las rutas y antes de `manejarErrores`.
+ * @param _req pedido
+ * @param res respuesta
+ */
+export function rutaInexistente(_req: Request, res: Response): void {
+  responderError(res, 404, MENSAJE_RUTA_INEXISTENTE);
 }
 
 /**
