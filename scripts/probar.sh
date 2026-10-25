@@ -8,7 +8,9 @@
 # con el endpoint, el caso, el status esperado y el obtenido. Además chequea
 # partes del contenido de algunas respuestas. Sale con 1 si algo falla.
 #
-# Uso: npm test (o bash scripts/probar.sh). Necesita curl y sqlite3.
+# Uso: npm test (o bash scripts/probar.sh). Necesita bash, curl y node: la base
+# se consulta con better-sqlite3 y las fechas se calculan con node, así corre
+# igual en macOS, Linux y Windows (Git Bash).
 # Usa su propia base, test.db, y nunca toca la dev.db de la app: cada corrida
 # la borra y la vuelve a crear con los datos de ejemplo.
 
@@ -52,7 +54,7 @@ abortar() {
   exit 1
 }
 
-command -v sqlite3 > /dev/null || abortar "falta sqlite3."
+command -v curl > /dev/null || abortar "falta curl."
 [ -f .env ] || abortar "falta el .env (cp .env.example .env)."
 [ -d node_modules ] || abortar "faltan las dependencias (npm install)."
 
@@ -85,6 +87,43 @@ echo "Probando…"
 
 # --- Helpers ---
 
+# Corre SQL sobre la base de pruebas, como el CLI de sqlite3: sql "<sentencias>"
+# Las sentencias van separadas por ";" (ninguna lleva ";" adentro). Las que
+# devuelven filas las imprimen una por línea, con las columnas separadas por "|".
+sql() {
+  node -e '
+    const db = require("better-sqlite3")(process.argv[1]);
+    for (const sentencia of process.argv[2].split(";").map((s) => s.trim()).filter(Boolean)) {
+      const st = db.prepare(sentencia);
+      if (!st.reader) { st.run(); continue; }
+      for (const fila of st.raw().all()) console.log(fila.map((x) => x ?? "").join("|"));
+    }' "$DB" "$1"
+}
+
+# Fecha corrida desde ahora, como `date -v` de macOS: fecha [-u] [ajuste] +formato
+# El ajuste es un número con signo y una unidad (H horas, d días, y años), por
+# ejemplo -1H o +3d. -u usa UTC; si no, la hora local. El formato acepta %Y %m %d %H %M %S.
+fecha() {
+  node -e '
+    const args = process.argv.slice(1);
+    const u = args[0] === "-u" ? "UTC" : "";
+    const formato = args.at(-1);
+    const m = /^([+-]\d+)([Hdy])$/.exec(args.find((x) => /^[+-]\d/.test(x)) ?? "");
+    const f = new Date();
+    if (m) {
+      const n = Number(m[1]);
+      if (m[2] === "H") f.setTime(f.getTime() + n * 3600000);
+      if (m[2] === "d") f["set" + u + "Date"](f["get" + u + "Date"]() + n);
+      if (m[2] === "y") f["set" + u + "FullYear"](f["get" + u + "FullYear"]() + n);
+    }
+    const dos = (x) => String(x).padStart(2, "0");
+    const partes = {
+      Y: f["get" + u + "FullYear"](), m: dos(f["get" + u + "Month"]() + 1), d: dos(f["get" + u + "Date"]()),
+      H: dos(f["get" + u + "Hours"]()), M: dos(f["get" + u + "Minutes"]()), S: dos(f["get" + u + "Seconds"]()),
+    };
+    console.log(formato.slice(1).replace(/%([YmdHMS])/g, (_, k) => partes[k]));' -- "$@"
+}
+
 # Empieza un grupo de casos en la tabla.
 seccion() { SECCION="$1"; }
 
@@ -102,11 +141,16 @@ como() { TOKEN="$1"; }
 # Hace un pedido y compara el status: t <caso> <esperado> <método> <ruta> [body]
 # Manda `Authorization: Bearer $TOKEN` si hay token elegido con `como`.
 # La respuesta queda en $LAST para las verificaciones que siguen.
+# El body viaja desde un archivo: en Windows, curl recibe los argumentos en la
+# página de códigos del sistema (rompe las tildes) y con un límite de ~32 KB.
 t() {
   local caso="$1" esperado="$2" metodo="$3" ruta="$4" body="${5:-}" status
   local args=(-s -o "$OUT" -w '%{http_code}' -X "$metodo")
   [ -n "$TOKEN" ] && args+=(-H "Authorization: Bearer $TOKEN")
-  [ -n "$body" ] && args+=(-H 'Content-Type: application/json' -d "$body")
+  if [ -n "$body" ]; then
+    printf '%s' "$body" > "$TMP/body"
+    args+=(-H 'Content-Type: application/json' --data-binary "@$TMP/body")
+  fi
   status=$(curl "${args[@]}" "$API$ruta")
   # Un 204 tiene que venir sin body.
   if [ "$status" = 204 ] && [ -s "$OUT" ]; then status="204 con body"; fi
@@ -134,7 +178,7 @@ login() {
 
 # Vence en la base la última sesión abierta (para probar un token vencido).
 vencer_ultima_sesion() {
-  sqlite3 "$DB" "update Sesion set vence = '$(date -u -v-1H +%Y-%m-%dT%H:%M:%S.000+00:00)' where id = (select max(id) from Sesion);"
+  sql "update Sesion set vence = '$(fecha -u -1H +%Y-%m-%dT%H:%M:%S.000+00:00)' where id = (select max(id) from Sesion);"
 }
 
 # Sube un archivo a POST /api/fotos: subir <caso> <esperado> <archivo> [campo]
@@ -156,20 +200,20 @@ hay_archivo() { [ -f "$UPLOADS_DIR/$(basename "$1")" ] && echo sí || echo no; }
 reporte_de() {
   local radio=NULL
   [ "$3" = perdido ] && radio=500
-  sqlite3 "$DB" "insert into ReportePerdida (mascotaId, autorId, estado, nombre, raza, descripcion, lat, lng, zona, fecha, radioMetros) values ($2, $1, '$3', '$4', 'Mestizo', 'Collar rojo', -34.58, -58.42, 'Palermo, CABA', '$(date -u -v-1H +%Y-%m-%dT%H:%M:%S.000+00:00)', $radio); select last_insert_rowid();"
+  sql "insert into ReportePerdida (mascotaId, autorId, estado, nombre, raza, descripcion, lat, lng, zona, fecha, radioMetros) values ($2, $1, '$3', '$4', 'Mestizo', 'Collar rojo', -34.58, -58.42, 'Palermo, CABA', '$(fecha -u -1H +%Y-%m-%dT%H:%M:%S.000+00:00)', $radio); select last_insert_rowid();"
 }
 
 # --- Casos ---
 
-AYER=$(date -v-1d +%Y-%m-%d); HOY=$(date +%Y-%m-%d); MANANA=$(date -v+1d +%Y-%m-%d)
-FUT_ISO=$(date -u -v+3d +%Y-%m-%dT13:30:00.000Z); PAS_ISO=$(date -u -v-3d +%Y-%m-%dT13:30:00.000Z)
-LEJOS_ISO=$(date -u -v+3y +%Y-%m-%dT13:30:00.000Z); AHORA_ISO=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+AYER=$(fecha -1d +%Y-%m-%d); HOY=$(fecha +%Y-%m-%d); MANANA=$(fecha +1d +%Y-%m-%d)
+FUT_ISO=$(fecha -u +3d +%Y-%m-%dT13:30:00.000Z); PAS_ISO=$(fecha -u -3d +%Y-%m-%dT13:30:00.000Z)
+LEJOS_ISO=$(fecha -u +3y +%Y-%m-%dT13:30:00.000Z); AHORA_ISO=$(fecha -u +%Y-%m-%dT%H:%M:%S.000Z)
 
 # Un registro y un turno de Toby (mascota 4, de Lucía) para probar los 403.
-sqlite3 "$DB" "insert into RegistroSanitario (mascotaId,tipo,nombre,fecha,profesional) values (4,'vacuna','Séxtuple','2026-01-10T00:00:00.000+00:00','Vet. Centro');"
-TOBY_REG=$(sqlite3 "$DB" "select max(id) from RegistroSanitario;")
-sqlite3 "$DB" "insert into Turno (mascotaId,categoria,fecha,motivo,lugar) values (4,'veterinario','$(date -u -v+5d +%Y-%m-%dT15:00:00.000+00:00)','Control','Vet. Centro');"
-TOBY_TUR=$(sqlite3 "$DB" "select max(id) from Turno;")
+sql "insert into RegistroSanitario (mascotaId,tipo,nombre,fecha,profesional) values (4,'vacuna','Séxtuple','2026-01-10T00:00:00.000+00:00','Vet. Centro');"
+TOBY_REG=$(sql "select max(id) from RegistroSanitario;")
+sql "insert into Turno (mascotaId,categoria,fecha,motivo,lugar) values (4,'veterinario','$(fecha -u +5d +%Y-%m-%dT15:00:00.000+00:00)','Control','Vet. Centro');"
+TOBY_TUR=$(sql "select max(id) from Turno;")
 
 # Archivos para las pruebas de fotos: imágenes mínimas con la firma de cada
 # formato, un texto con extensión .jpg y una foto de más de 5 MB.
@@ -198,7 +242,7 @@ v "devuelve un token" sí "$(jok 'typeof r.token === "string" && r.token.length 
 v "email limpio y en minúsculas" ana.ruiz@mail.com "$(jget .usuario.email)"
 v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r.usuario)')"
 v "id nuevo (no el del body)" sí "$(jok 'r.usuario.id > 20')"
-v "la contraseña se guarda hasheada" 1 "$(sqlite3 "$DB" "select passwordHash like '\$2%' from Usuario where id = $NUEVO_ID;")"
+v "la contraseña se guarda hasheada" 1 "$(sql "select passwordHash like '\$2%' from Usuario where id = $NUEVO_ID;")"
 t "email ya registrado (otras mayúsculas)" 409 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ANA.RUIZ@mail.com","password":"perro1234"}'
 t "email de una cuenta del seed" 409 POST /api/auth/registro '{"nombre":"Sofía","apellido":"Romero","email":"sofia.romero@mail.com","password":"perro1234"}'
 t "contraseña de 7 caracteres" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perro12"}'
@@ -239,11 +283,11 @@ como "token-que-no-existe"
 t "token inválido" 401 GET /api/mascotas
 t "token inválido en un DELETE" 401 DELETE /api/turnos/1
 VENCE=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
-VENCE_ID=$(sqlite3 "$DB" "select max(id) from Sesion;")
+VENCE_ID=$(sql "select max(id) from Sesion;")
 vencer_ultima_sesion
 como "$VENCE"
 t "token vencido" 401 GET /api/usuarios/me
-v "la sesión vencida se borra" 0 "$(sqlite3 "$DB" "select count(*) from Sesion where id = $VENCE_ID;")"
+v "la sesión vencida se borra" 0 "$(sql "select count(*) from Sesion where id = $VENCE_ID;")"
 code=$(curl -s -o "$OUT" -w '%{http_code}' -H "Authorization: Token $SOFIA" "$API/api/usuarios/me"); LAST=$(cat "$OUT")
 fila http "GET /api/usuarios/me" "header sin 'Bearer'" 401 "$code" "$(resumen)"
 SALIR=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
@@ -408,7 +452,7 @@ como "$SOFIA"
 seccion "Registros"
 subir "foto de la etiqueta" 201 "$F_JPG"
 FOTO_ETIQUETA=$(jget .foto)
-t "alta válida con refuerzo" 201 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(date -v+1y +%Y-%m-%d)\",\"fotoEtiqueta\":\"$FOTO_ETIQUETA\",\"mascotaId\":4}"
+t "alta válida con refuerzo" 201 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(fecha +1y +%Y-%m-%d)\",\"fotoEtiqueta\":\"$FOTO_ETIQUETA\",\"mascotaId\":4}"
 REG=$(jget .id)
 v "guarda la foto de la etiqueta" "$FOTO_ETIQUETA" "$(jget .fotoEtiqueta)"
 v "fecha como AAAA-MM-DD" "$HOY" "$(jget .fecha)"
@@ -418,7 +462,7 @@ t "fecha futura" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nomb
 t "fecha de hace 31 años" 400 POST /api/mascotas/1/registros '{"tipo":"vacuna","nombre":"Antirrábica","fecha":"1990-01-01","profesional":"Vet. San Roque"}'
 t "día inexistente" 400 POST /api/mascotas/1/registros '{"tipo":"vacuna","nombre":"Antirrábica","fecha":"2026-02-31","profesional":"Vet. San Roque"}'
 t "refuerzo anterior" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$AYER\"}"
-t "refuerzo a 6 años" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(date -v+6y +%Y-%m-%d)\"}"
+t "refuerzo a 6 años" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(fecha +6y +%Y-%m-%d)\"}"
 t "tipo inválido" 400 POST /api/mascotas/1/registros "{\"tipo\":\"cirugia\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
 t "mascota ajena" 403 POST /api/mascotas/4/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
 t "mascota no existe" 404 POST /api/mascotas/9999/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
@@ -448,8 +492,8 @@ t "sin hora" 400 POST /api/turnos "{\"mascotaId\":1,\"categoria\":\"veterinario\
 t "categoría inválida" 400 POST /api/turnos "{\"mascotaId\":1,\"categoria\":\"spa\",\"fecha\":\"$FUT_ISO\",\"motivo\":\"Control anual\",\"lugar\":\"Vet. San Roque\"}"
 t "mascota ajena" 403 POST /api/turnos "{\"mascotaId\":4,\"categoria\":\"veterinario\",\"fecha\":\"$FUT_ISO\",\"motivo\":\"Control anual\",\"lugar\":\"Vet. San Roque\"}"
 t "mascota no existe" 404 POST /api/turnos "{\"mascotaId\":9999,\"categoria\":\"veterinario\",\"fecha\":\"$FUT_ISO\",\"motivo\":\"Control anual\",\"lugar\":\"Vet. San Roque\"}"
-sqlite3 "$DB" "insert into Turno (mascotaId,categoria,fecha,motivo,lugar) values (1,'peluqueria','$(date -u -v-2d +%Y-%m-%dT15:00:00.000+00:00)','Baño','Peluquería Canina');"
-PASADO=$(sqlite3 "$DB" "select max(id) from Turno;")
+sql "insert into Turno (mascotaId,categoria,fecha,motivo,lugar) values (1,'peluqueria','$(fecha -u -2d +%Y-%m-%dT15:00:00.000+00:00)','Baño','Peluquería Canina');"
+PASADO=$(sql "select max(id) from Turno;")
 t "turno pasado: cambia el lugar sin tocar la fecha" 200 PATCH /api/turnos/$PASADO '{"lugar":"Peluquería del barrio"}'
 t "turno pasado: mueve a otra fecha pasada" 400 PATCH /api/turnos/$PASADO "{\"fecha\":\"$PAS_ISO\"}"
 t "mueve a otra mascota asignada" 200 PATCH /api/turnos/$TUR '{"mascotaId":2}'
@@ -488,7 +532,7 @@ t "reporte de otro autor" 403 PATCH /api/reportes/1 '{"cerrado":true}'
 t "no existe" 404 PATCH /api/reportes/9999 '{"cerrado":true}'
 t "id inválido" 400 PATCH /api/reportes/1.5 '{"cerrado":true}'
 t "cerrar (Ya apareció)" 200 PATCH /api/reportes/$REP '{"cerrado":true}'
-v "cerradoEn quedó guardado en la base" 1 "$(sqlite3 "$DB" "select cerradoEn is not null from ReportePerdida where id = $REP;")"
+v "cerradoEn quedó guardado en la base" 1 "$(sql "select cerradoEn is not null from ReportePerdida where id = $REP;")"
 t "cerrar otra vez" 409 PATCH /api/reportes/$REP '{"cerrado":true}'
 t "reportes activos después de cerrar" 200 GET /api/reportes
 v "el cerrado ya no sale" sí "$(jok "!r.some((x) => x.id === $REP)")"

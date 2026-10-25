@@ -31,7 +31,7 @@ doggy (app) ──HTTP/JSON──► Express ──► Prisma ──► SQLite (
 
 ## Cómo correrlo
 
-Requisitos: Node LTS. Para las pruebas, además, `curl` y `sqlite3` (vienen con macOS).
+Requisitos: Node LTS. Para las pruebas, además, `bash` y `curl` (vienen con macOS y, en Windows, con Git Bash).
 
 ```bash
 cp .env.example .env # primero: el postinstall de npm install lo necesita
@@ -263,7 +263,7 @@ Corre `scripts/probar.sh`, que prueba la API con `curl` (más de 250 chequeos):
 5. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
 6. Baja el servidor al terminar.
 
-Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, una sesión vencida o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`. Para subir un archivo: `subir "<caso>" <status esperado> <archivo>`.
+Algunos casos se preparan insertando filas directo en la base con el helper `sql`, que usa `better-sqlite3` (por ejemplo, una sesión vencida o un reporte publicado por otro usuario); las fechas relativas salen del helper `fecha`. Así el script no depende del CLI de `sqlite3` ni del `date` de macOS, y corre igual en Windows. Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`. Para subir un archivo: `subir "<caso>" <status esperado> <archivo>`.
 
 ## Estructura
 
