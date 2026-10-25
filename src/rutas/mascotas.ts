@@ -8,7 +8,7 @@
 import { Router } from 'express';
 import { leerCambiosMascota, leerMascotaNueva } from '../cuerpos/mascota';
 import { leerRegistroNuevo } from '../cuerpos/registro';
-import { DIAS_VIGENCIA_INVITACION, esValorDe, ROLES_MASCOTA } from '../dominio';
+import { esValorDe, ROLES_MASCOTA } from '../dominio';
 import {
   chequearMascota,
   MENSAJE_MASCOTA_NO_EXISTE,
@@ -27,8 +27,6 @@ export const mascotasRouter = Router();
 
 /** Cómo queda asignado quien da de alta una mascota (igual que `asignarCreador` en la app). */
 const ASIGNACION_CREADOR = { rol: 'dueno', detalle: 'Tutor/a', tipo: 'familia' } as const;
-
-const DIA_MS = 24 * 60 * 60 * 1000;
 
 const MENSAJE_NO_ASIGNADO = 'No estás asignado a esta mascota.';
 const MENSAJE_UNICO_DUENO = 'Sos el único dueño. Asigná a otra persona como dueña antes de irte.';
@@ -179,7 +177,7 @@ mascotasRouter.post('/:id/registros', async (req, res) => {
 
 /**
  * POST /api/mascotas/:id/invitaciones: genera un código de asignación de 8
- * caracteres que vence a los 7 días. Solo lo puede hacer un dueño.
+ * caracteres, de un solo uso. Solo lo puede hacer un dueño.
  * Body: rol ('dueno' o 'invitado'), el rol con que queda quien lo acepte.
  * Responde 201 con la Invitacion, 400 si el id o el rol no es válido, 403 si
  * no es dueño, 404 si la mascota no existe o 500.
@@ -219,7 +217,6 @@ mascotasRouter.post('/:id/invitaciones', async (req, res) => {
         mascotaId,
         rol: rol.datos,
         creadaPorId: req.usuarioId,
-        vence: new Date(Date.now() + DIAS_VIGENCIA_INVITACION * DIA_MS),
       },
       include: INCLUIR_MASCOTA_INVITACION,
     });

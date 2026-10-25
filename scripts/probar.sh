@@ -513,6 +513,7 @@ t "genera código (dueña de Luna)" 201 POST /api/mascotas/1/invitaciones '{"rol
 CODIGO_LUNA=$(jget .token)
 v "código de 8 caracteres" 8 "${#CODIGO_LUNA}"
 v "trae la mascota" Luna "$(jget .mascota.nombre)"
+v "no trae vencimiento (es de un solo uso)" no "$(jok '"vence" in r')"
 t "rol inválido" 400 POST /api/mascotas/1/invitaciones '{"rol":"admin"}'
 t "mascota no asignada (Toby)" 403 POST /api/mascotas/4/invitaciones '{"rol":"invitado"}'
 t "mascota no existe" 404 POST /api/mascotas/9999/invitaciones '{"rol":"invitado"}'
@@ -526,9 +527,6 @@ t "perdido de Toby siendo invitada: lo cierra" 200 PATCH /api/reportes/$R_TOBY '
 t "aceptar TOBY2026 otra vez" 410 POST /api/invitaciones/TOBY2026/aceptar
 t "ver TOBY2026 usado" 410 GET /api/invitaciones/TOBY2026
 t "invitada de Toby genera código" 403 POST /api/mascotas/4/invitaciones '{"rol":"invitado"}'
-sqlite3 "$DB" "insert into Invitacion (token,mascotaId,rol,creadaPorId,vence,usada) values ('VENCIDO1',3,'invitado',1,'$(date -u -v-1d +%Y-%m-%dT12:00:00.000+00:00)',0);"
-t "ver código vencido" 410 GET /api/invitaciones/VENCIDO1
-t "aceptar código vencido" 410 POST /api/invitaciones/VENCIDO1/aceptar
 t "código que no existe" 404 GET /api/invitaciones/NOEXISTE
 t "aceptar código que no existe" 404 POST /api/invitaciones/NOEXISTE/aceptar
 t "código con símbolos" 400 GET /api/invitaciones/AB-CD

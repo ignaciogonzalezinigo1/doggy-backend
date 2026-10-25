@@ -227,7 +227,7 @@ export function aCuidador(cuidador: CuidadorConUsuario): CuidadorRespuesta {
 }
 
 /**
- * Invitación con la fecha de vencimiento como ISO y los datos de la mascota.
+ * Invitación con los datos de la mascota.
  * @param invitacion invitación leída con `INCLUIR_MASCOTA_INVITACION`
  * @returns la invitación para responder
  */
@@ -238,7 +238,6 @@ export function aInvitacion(invitacion: InvitacionConMascota): InvitacionRespues
     mascotaId: invitacion.mascotaId,
     rol: valorDe(ROLES_MASCOTA, invitacion.rol, 'Invitacion.rol'),
     creadaPorId: invitacion.creadaPorId,
-    vence: invitacion.vence.toISOString(),
     usada: invitacion.usada,
     mascota: { nombre, raza, foto },
   };

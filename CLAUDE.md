@@ -41,7 +41,7 @@ Además, `GET /api/health` → `{ ok: true }` para chequear que el servidor est�
 
 - Cada función de `doggy/mobile/src/services/` tiene comentado su endpoint, con la ruta y el cuerpo que manda.
 - **Las respuestas tienen que tener exactamente la forma de los tipos de `doggy/mobile/src/types/models.ts`:** mismos nombres de campo, ids numéricos, fechas como string ISO, relaciones por id (`mascotaId`, `autorId`), opcionales que se omiten o llegan como `null` según diga el tipo. Si el modelo de Prisma guarda algo distinto (por ejemplo, las etiquetas de un reporte en una tabla aparte), la ruta lo transforma antes de responder.
-- Los códigos de asignación responden 410 si vencieron o ya se usaron, y 404 si no existen.
+- Los códigos de asignación son de un solo uso y no vencen: responden 410 si ya se usaron, y 404 si no existen.
 - **Cerrar un reporte ("Ya apareció") es `PATCH /api/reportes/:id` con `{ cerrado: true }`**, no un DELETE: el servidor pone la fecha en `ReportePerdida.cerradoEn` y el reporte queda guardado como historial. `GET /api/reportes` devuelve solo los activos (`cerradoEn` null). Un reporte cerrado no se puede editar ni reabrir (409).
 - **Quién edita o cierra un reporte:** quien lo publicó o cualquier usuario asignado a la mascota del reporte (dueño o invitado), así si la encuentra otro integrante de la familia la saca del mapa sin esperar a quien la reportó (regla del README de `doggy`, Sprint 1). Un reporte sin `mascotaId` (un `encontrado` de un perro sin identificar) solo lo edita o cierra su autor. Si no, 403.
 - **Para borrar un opcional en un PATCH se manda `null`** (`proximaDosis`, `fotoEtiqueta`, `infoAdicional`, `foto`). Un campo que no viene no se toca; ojo que `JSON.stringify` descarta los `undefined`.
@@ -81,7 +81,7 @@ No es una lista cerrada: la regla es responder con el status que corresponde a c
 | 403 | con sesión, pero sin permiso sobre ese recurso |
 | 404 | no existe |
 | 409 | conflicto con el estado actual: email ya registrado, ya asignado a la mascota, único dueño que quiere desasignarse, reporte ya cerrado, mascota ya reportada |
-| 410 | código de asignación vencido o ya usado |
+| 410 | código de asignación ya usado |
 | 413 | la foto subida pesa más de 5 MB, o el body JSON más de 100 KB |
 | 500 | error imprevisto |
 

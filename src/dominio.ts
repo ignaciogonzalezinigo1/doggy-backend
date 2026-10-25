@@ -43,9 +43,6 @@ export const MAXIMO_ETIQUETAS = 5;
  */
 export const CLAVES_FOTO_SEED = ['luna', 'roco', 'milo', 'simba', 'sin-collar', 'sofia', 'carlos'] as const;
 
-/** Días que dura un código de asignación. */
-export const DIAS_VIGENCIA_INVITACION = 7;
-
 /**
  * Indica si un valor recibido pertenece a una de las listas de arriba.
  * @param lista valores válidos, por ejemplo `ESTADOS_REPORTE`

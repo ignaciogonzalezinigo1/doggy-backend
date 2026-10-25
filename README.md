@@ -152,8 +152,8 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 401 · 403 no es el autor ni está asignado · 404 · 409 ya cerrado | Sí |
 | GET | `/api/cuidadores` | — | 200 Cuidador[] · 401 | Sí |
 | DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 401 · 403 · 404 · 409 único dueño | Sí |
-| POST | `/api/mascotas/:id/invitaciones` | `rol` (`dueno` o `invitado`) | 201 Invitacion (8 caracteres, vence a 7 días) · 400 · 401 · 403 no es dueño · 404 | Sí |
-| GET | `/api/invitaciones/:token` | — | 200 Invitacion · 400 · 401 · 404 · 410 usado o vencido | Sí |
+| POST | `/api/mascotas/:id/invitaciones` | `rol` (`dueno` o `invitado`) | 201 Invitacion (8 caracteres, de un solo uso) · 400 · 401 · 403 no es dueño · 404 | Sí |
+| GET | `/api/invitaciones/:token` | — | 200 Invitacion · 400 · 401 · 404 · 410 ya usado | Sí |
 | POST | `/api/invitaciones/:token/aceptar` | — | 200 Cuidador · 400 · 401 · 404 · 409 ya asignado · 410 | Sí |
 
 Las respuestas tienen exactamente la forma de los tipos de `doggy/mobile/src/types/models.ts`: ids numéricos, fechas como string ISO (las del carnet, `AAAA-MM-DD`) y relaciones por id. Las reglas completas (permisos, validaciones y el contrato con la app) están en `CLAUDE.md`.
@@ -170,7 +170,7 @@ Las respuestas tienen exactamente la forma de los tipos de `doggy/mobile/src/typ
 | 403 | con sesión, pero sin permiso sobre ese recurso |
 | 404 | no existe |
 | 409 | conflicto con el estado actual: email ya registrado, ya asignado, único dueño, reporte ya cerrado o mascota ya reportada |
-| 410 | código de asignación vencido o ya usado |
+| 410 | código de asignación ya usado |
 | 413 | la foto pesa más de 5 MB, o el body JSON más de 100 KB |
 | 500 | error imprevisto |
 
@@ -226,7 +226,7 @@ Usuario ─────────┼──< Cuidador >────────
 | `Sesion` | `tokenHash` (SHA-256 del token, único), `vence` | Pertenece a un usuario (se borra con él) |
 | `Mascota` | Nombre, raza, edad, `codigo` (único, el del QR), señas, foto | Pertenece a su tutor (`tutorId`); tiene registros, turnos, cuidadores, reportes e invitaciones |
 | `Cuidador` | `rol` (`dueno` / `invitado`), detalle y tipo del vínculo | Une `Usuario` y `Mascota` (muchos a muchos). `@@unique([mascotaId, usuarioId])`: una persona no se asigna dos veces |
-| `Invitacion` | `token` (8 caracteres, clave primaria), `rol` ofrecido, `vence`, `usada` | Pertenece a una mascota y al dueño que la generó |
+| `Invitacion` | `token` (8 caracteres, clave primaria), `rol` ofrecido, `usada` (es de un solo uso: no vence) | Pertenece a una mascota y al dueño que la generó |
 | `RegistroSanitario` | Tipo (vacuna, desparasitación, otro), nombre, fecha, profesional, próxima dosis, foto de la etiqueta | Pertenece a una mascota (se borra con ella) |
 | `Turno` | Categoría, fecha y hora, motivo, lugar | Pertenece a una mascota (se borra con ella) |
 | `ReportePerdida` | Estado (perdido / encontrado), nombre, raza, descripción, foto, `lat`/`lng`, zona, fecha, radio, info adicional, `cerradoEn` | Pertenece a su autor; la mascota es opcional (un encontrado puede ser de un perro sin identificar) |
@@ -259,11 +259,11 @@ Corre `scripts/probar.sh`, que prueba la API con `curl` (más de 250 chequeos):
 1. Resetea su propia base, `test.db`, con `npm run db:reset`. El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. Si el script lo corre un agente de IA (por ejemplo, Claude Code), Prisma 7 frena el `--force-reset` y pide que una persona lo confirme: el agente tiene que preguntar y volver a correrlo con `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`. Corrido a mano no pide nada.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre). Las fotos que sube van a una carpeta temporal (`UPLOADS_DIR`), no a `uploads/`.
 3. Hace login con Sofía, Lucía y Carlos y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
-4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos vencidos o usados. También chequea partes del contenido (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: cada formato válido, un texto con extensión `.jpg`, uno de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
+4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos ya usados. También chequea partes del contenido (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: cada formato válido, un texto con extensión `.jpg`, uno de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
 5. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
 6. Baja el servidor al terminar.
 
-Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, un código de asignación vencido o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`. Para subir un archivo: `subir "<caso>" <status esperado> <archivo>`.
+Algunos casos se preparan insertando filas directo en la base con `sqlite3` (por ejemplo, una sesión vencida o un reporte publicado por otro usuario). Para sumar un caso: `t "<caso>" <status esperado> <método> <ruta> '<body JSON>'`; el pedido sale con el token elegido antes con `como "$SOFIA"` (o `como ""` para probar sin sesión), y para chequear un valor de esa respuesta, `v "<caso>" <esperado> "$(jget .campo)"`. Para subir un archivo: `subir "<caso>" <status esperado> <archivo>`.
 
 ## Estructura
 

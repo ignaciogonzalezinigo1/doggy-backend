@@ -103,7 +103,6 @@ export type InvitacionRespuesta = {
   mascotaId: number;
   rol: RolMascota;
   creadaPorId: number;
-  vence: string;
   usada: boolean;
   mascota: Pick<MascotaRespuesta, 'nombre' | 'raza' | 'foto'>;
 };

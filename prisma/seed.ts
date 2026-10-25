@@ -382,7 +382,6 @@ const invitaciones = [
     mascotaId: 4,
     rol: 'invitado',
     creadaPorId: LUCIA_ID,
-    vence: new Date('2027-12-31T23:59:59.000Z'),
     usada: false,
   },
 ];

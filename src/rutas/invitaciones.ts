@@ -3,12 +3,11 @@
  * Generarlos va colgado de la mascota: POST /api/mascotas/:id/invitaciones
  * (rutas/mascotas.ts).
  *
- * Un código sirve para una sola persona y vence: si ya se usó o venció
- * responde 410, y si no existe, 404.
+ * Un código es de un solo uso y no vence: si ya se usó responde 410, y si no
+ * existe, 404.
  */
 
 import { Router } from 'express';
-import type { Invitacion } from '../generated/prisma/client';
 import { rolEn } from '../lib/asignaciones';
 import { responderError, responderErrorInterno } from '../lib/errores';
 import { prisma } from '../lib/prisma';
@@ -28,7 +27,6 @@ const TIPO_ACEPTADO = 'familia';
 const MENSAJE_TOKEN_INVALIDO = 'Este código de asignación no tiene un formato válido.';
 const MENSAJE_NO_EXISTE = 'Este código de asignación no existe. Revisá que esté bien escrito.';
 const MENSAJE_USADO = 'Este código ya se usó. Pedile a un dueño que te mande uno nuevo.';
-const MENSAJE_VENCIDO = 'Este código venció. Pedile a un dueño que te mande uno nuevo.';
 
 /**
  * Pasa el código a como se guarda: sin espacios y en mayúsculas.
@@ -41,21 +39,10 @@ function normalizarToken(token: string | undefined): string | null {
 }
 
 /**
- * Motivo por el que un código ya no se puede usar.
- * @param invitacion invitación guardada
- * @returns el mensaje del 410, o null si se puede usar
- */
-function motivoNoUsable(invitacion: Invitacion): string | null {
-  if (invitacion.usada) return MENSAJE_USADO;
-  if (invitacion.vence < new Date()) return MENSAJE_VENCIDO;
-  return null;
-}
-
-/**
  * GET /api/invitaciones/:token: muestra un código de asignación (con los
  * datos de la mascota) antes de aceptarlo.
  * Responde 200 con la Invitacion, 400 si el código no tiene formato válido,
- * 404 si no existe, 410 si ya se usó o venció o 500.
+ * 404 si no existe, 410 si ya se usó o 500.
  */
 invitacionesRouter.get('/:token', async (req, res) => {
   const token = normalizarToken(req.params.token);
@@ -72,9 +59,8 @@ invitacionesRouter.get('/:token', async (req, res) => {
       responderError(res, 404, MENSAJE_NO_EXISTE);
       return;
     }
-    const motivo = motivoNoUsable(invitacion);
-    if (motivo) {
-      responderError(res, 410, motivo);
+    if (invitacion.usada) {
+      responderError(res, 410, MENSAJE_USADO);
       return;
     }
     res.json(aInvitacion(invitacion));
@@ -90,7 +76,7 @@ invitacionesRouter.get('/:token', async (req, res) => {
  * al mismo tiempo.
  * Responde 200 con el Cuidador creado, 400 si el código no tiene formato
  * válido, 404 si no existe, 409 si el usuario ya está asignado, 410 si ya se
- * usó o venció o 500.
+ * usó o 500.
  */
 invitacionesRouter.post('/:token/aceptar', async (req, res) => {
   const token = normalizarToken(req.params.token);
@@ -105,8 +91,7 @@ invitacionesRouter.post('/:token/aceptar', async (req, res) => {
         include: INCLUIR_MASCOTA_INVITACION,
       });
       if (!invitacion) return { ok: false, status: 404, error: MENSAJE_NO_EXISTE } as const;
-      const motivo = motivoNoUsable(invitacion);
-      if (motivo) return { ok: false, status: 410, error: motivo } as const;
+      if (invitacion.usada) return { ok: false, status: 410, error: MENSAJE_USADO } as const;
       if (await rolEn(invitacion.mascotaId, req.usuarioId, tx)) {
         const error = `Ya estás asignado a ${invitacion.mascota.nombre}.`;
         return { ok: false, status: 409, error } as const;

@@ -157,7 +157,7 @@ model Cuidador {
   @@unique([mascotaId, usuarioId])
 }
 
-/// Código de asignación de una mascota: lo genera un dueño, sirve para una persona y vence.
+/// Código de asignación de una mascota: lo genera un dueño y es de un solo uso (no vence).
 model Invitacion {
   token       String   @id
   mascotaId   Int
@@ -167,7 +167,6 @@ model Invitacion {
   /// Dueño que generó el código.
   creadaPorId Int
   creadaPor   Usuario  @relation(fields: [creadaPorId], references: [id], onDelete: Cascade)
-  vence       DateTime
   usada       Boolean  @default(false)
 }
 
