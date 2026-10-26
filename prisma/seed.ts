@@ -80,7 +80,7 @@ const usuarios = [
     email: 'sofia.romero@mail.com',
     ubicacion: 'Palermo, Buenos Aires',
     foto: 'sofia',
-    telefonoEmergencia: '+54 9 11 4589-2310',
+    telefonoEmergencia: '+5491145892310',
   },
   {
     id: 2,
@@ -89,7 +89,7 @@ const usuarios = [
     email: 'martin.lopez@mail.com',
     ubicacion: 'Palermo, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 9 11 5320-1187',
+    telefonoEmergencia: '+5491153201187',
   },
   {
     id: 3,
@@ -98,7 +98,7 @@ const usuarios = [
     email: 'valentina.perez@mail.com',
     ubicacion: 'Belgrano, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 9 11 6274-9031',
+    telefonoEmergencia: '+5491162749031',
   },
   {
     id: 4,
@@ -107,7 +107,7 @@ const usuarios = [
     email: 'julian.fernandez@mail.com',
     ubicacion: 'Recoleta, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 9 11 4812-6650',
+    telefonoEmergencia: '+5491148126650',
   },
   {
     id: 11,
@@ -116,7 +116,7 @@ const usuarios = [
     email: 'carlos.romero@mail.com',
     ubicacion: 'Palermo, Buenos Aires',
     foto: 'carlos',
-    telefonoEmergencia: '+54 9 11 4589-7712',
+    telefonoEmergencia: '+5491145897712',
   },
   {
     // Cuenta de una clínica: el nombre completo va en `nombre` para que el
@@ -127,7 +127,7 @@ const usuarios = [
     email: 'contacto@vetsanroque.com',
     ubicacion: 'Palermo, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 11 4777-3020',
+    telefonoEmergencia: '+541147773020',
   },
   {
     id: 13,
@@ -136,7 +136,7 @@ const usuarios = [
     email: 'marcos.diaz@mail.com',
     ubicacion: 'Palermo, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 9 11 3456-7821',
+    telefonoEmergencia: '+5491134567821',
   },
   {
     id: 14,
@@ -145,7 +145,7 @@ const usuarios = [
     email: 'sol.romero@mail.com',
     ubicacion: 'Colegiales, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 9 11 4589-0045',
+    telefonoEmergencia: '+5491145890045',
   },
   {
     id: LUCIA_ID,
@@ -154,7 +154,7 @@ const usuarios = [
     email: 'lucia.gomez@mail.com',
     ubicacion: 'Caballito, Buenos Aires',
     foto: null,
-    telefonoEmergencia: '+54 9 11 5098-3364',
+    telefonoEmergencia: '+5491150983364',
   },
 ];
 
@@ -164,7 +164,7 @@ const mascotas = [
     tutorId: SOFIA_ID,
     nombre: 'Luna',
     raza: 'Golden Retriever',
-    edad: 3,
+    fechaNacimiento: dia('2023-03-14'),
     codigo: 'DOGGY-8492-LUNA',
     senas: 'Mancha blanca en el pecho',
     foto: 'luna',
@@ -174,7 +174,7 @@ const mascotas = [
     tutorId: SOFIA_ID,
     nombre: 'Roco',
     raza: 'Bulldog Francés',
-    edad: 1,
+    fechaNacimiento: dia('2025-04-02'),
     codigo: 'DOGGY-3127-ROCO',
     senas: 'Collar verde con chapita. Oreja izquierda un poco caída.',
     foto: 'roco',
@@ -184,7 +184,7 @@ const mascotas = [
     tutorId: SOFIA_ID,
     nombre: 'Milo',
     raza: 'Mestizo',
-    edad: 5,
+    fechaNacimiento: dia('2021-06-20'),
     codigo: 'DOGGY-5610-MILO',
     senas: 'Pelo claro con manchas marrones en las orejas.',
     foto: 'milo',
@@ -195,7 +195,7 @@ const mascotas = [
     tutorId: LUCIA_ID,
     nombre: 'Toby',
     raza: 'Beagle',
-    edad: 4,
+    fechaNacimiento: dia('2022-01-08'),
     codigo: 'DOGGY-7741-TOBY',
     senas: 'Tricolor, con la punta de la cola blanca.',
     foto: null,

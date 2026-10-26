@@ -15,14 +15,13 @@ import {
   leerCuerpo,
   leerFoto,
   leerPresentes,
+  leerSoloFecha,
   leerTexto,
   leerTodos,
   type Lectores,
   type Resultado,
 } from '../lib/entrada';
 import {
-  conCampo,
-  parsearSoloFecha,
   validarFechaAplicacion,
   validarNombreRegistro,
   validarProfesional,
@@ -38,21 +37,6 @@ export type DatosRegistro = {
   proximaDosis: Date | null;
   fotoEtiqueta: string | null;
 };
-
-/** Mensaje de formato de una fecha sin hora. */
-const FORMATO_SOLO_FECHA = 'Usá el formato AAAA-MM-DD con una fecha real.';
-
-/**
- * Lee una fecha sin hora (AAAA-MM-DD).
- * @param valor lo que llegó
- * @param campo nombre del campo
- * @returns la fecha a medianoche UTC
- */
-function leerSoloFecha(valor: unknown, campo: string): Date {
-  const fecha = typeof valor === 'string' ? parsearSoloFecha(valor) : null;
-  if (!fecha) throw new DatoInvalido(conCampo(campo, FORMATO_SOLO_FECHA));
-  return fecha;
-}
 
 const LECTORES: Lectores<DatosRegistro> = {
   tipo: (v) => {

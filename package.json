@@ -9,6 +9,8 @@
     "db:init": "prisma db push && prisma generate",
     "db:seed": "prisma db seed",
     "db:reset": "prisma db push --force-reset && prisma generate && prisma db seed",
+    "db:migrar-fecha-nacimiento": "tsx scripts/migrar-fecha-nacimiento.ts && prisma db push --accept-data-loss && prisma generate",
+    "db:normalizar-telefonos": "tsx scripts/normalizar-telefonos.ts",
     "studio": "tsx scripts/studio.ts",
     "test": "bash scripts/probar.sh",
     "postinstall": "prisma generate"
@@ -21,6 +23,7 @@
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
+    "libphonenumber-js": "^1.12.10",
     "multer": "^2.5.0"
   },
   "devDependencies": {

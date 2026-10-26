@@ -363,7 +363,7 @@ v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4
 t "reportes activos" 200 GET /api/reportes
 v "los 4 del seed, con etiquetas como lista" sí "$(jok 'r.length === 4 && r.every((x) => Array.isArray(x.etiquetas))')"
 v "solo el encontrado de Milo trae contacto" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
-v "es el de Valentina, que lo encontró" "Valentina +54 9 11 6274-9031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
+v "es el de Valentina, que lo encontró (en E.164)" "Valentina +5491162749031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
 como "$LUCIA"
 t "reportes activos (Lucía, sin Milo asignado)" 200 GET /api/reportes
 v "ninguno trae contacto" sí "$(jok '!r.some((x) => "contacto" in x)')"
@@ -402,6 +402,18 @@ t "email en mayúsculas" 200 PATCH /api/usuarios/me '{"email":" Sofia.Romero@MAI
 v "se guarda limpio y en minúsculas" sofia.romero@mail.com "$(jget .email)"
 t "nombre con números" 400 PATCH /api/usuarios/me '{"nombre":"Sofi4"}'
 t "teléfono corto" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"123"}'
+v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
+t "teléfono con letras" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 4589-23AB"}'
+t "teléfono que no existe (11 1234)" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 1234"}'
+# El mismo celular escrito de cuatro formas distintas se guarda igual, en E.164.
+for formato in "+54 9 11 4589-2310" "011 15 4589-2310" "11 15 4589-2310" "+5491145892310"; do
+  t "teléfono \"$formato\"" 200 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
+  v "se guarda en E.164" +5491145892310 "$(jget .telefonoEmergencia)"
+done
+t "fijo sin 9 ni 15 (11 4589-2310)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 4589-2310"}'
+v "es otro número: el fijo" +541145892310 "$(jget .telefonoEmergencia)"
+t "fijo con paréntesis ((011) 4777-3020)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020"}'
+v "se guarda en E.164" +541147773020 "$(jget .telefonoEmergencia)"
 t "body vacío" 400 PATCH /api/usuarios/me '{}'
 t "email de otra cuenta" 409 PATCH /api/usuarios/me '{"email":"lucia.gomez@mail.com"}'
 t "foto con URI del celular" 400 PATCH /api/usuarios/me '{"foto":"file:///var/mobile/perro.jpg"}'
@@ -415,15 +427,22 @@ t "vuelve a la foto del seed" 200 PATCH /api/usuarios/me '{"foto":"sofia"}'
 v "se borró la foto subida" no "$(hay_archivo "$FOTO_B")"
 
 seccion "Mascotas"
-t "alta válida" 201 POST /api/mascotas '{"nombre":"Ñandú","raza":"Mestizo","edad":2,"senas":"Mancha blanca en el pecho","foto":null,"codigo":"HACK","tutorId":99}'
+t "alta válida" 201 POST /api/mascotas '{"nombre":"Ñandú","raza":"Mestizo","fechaNacimiento":"2024-05-10","senas":"Mancha blanca en el pecho","foto":null,"codigo":"HACK","tutorId":99}'
 NUEVA=$(jget .id); CODIGO=$(jget .codigo)
 v "el código lo genera el servidor" sí "$(jok '/^DOGGY-[A-Z0-9]{4}-/.test(r.codigo)')"
 v "el tutor es el de la sesión" 1 "$(jget .tutorId)"
 t "la mascota nueva tiene cuidadores" 200 GET /api/cuidadores
 v "quien la dio de alta quedó como dueño" dueno "$(jmap "r.filter((c) => c.mascotaId === $NUEVA && c.usuarioId === 1).map((c) => c.rol).join()")"
-t "edad 31" 400 POST /api/mascotas '{"nombre":"Toto","raza":"Mestizo","edad":31,"senas":"Orejas largas"}'
-t "nombre vacío" 400 POST /api/mascotas '{"raza":"Mestizo","edad":3,"senas":"Orejas largas"}'
-t "señas con emoji" 400 POST /api/mascotas '{"nombre":"Toto","raza":"Mestizo","edad":3,"senas":"Muy bueno 🐶"}'
+HACE_31=$(fecha -31y +%Y-%m-%d)
+t "nació hace 31 años" 400 POST /api/mascotas "{\"nombre\":\"Toto\",\"raza\":\"Mestizo\",\"fechaNacimiento\":\"$HACE_31\",\"senas\":\"Orejas largas\"}"
+v "dice el máximo" sí "$(jok 'r.error.includes("más de 30 años")')"
+t "fecha de nacimiento futura" 400 POST /api/mascotas "{\"nombre\":\"Toto\",\"raza\":\"Mestizo\",\"fechaNacimiento\":\"$MANANA\",\"senas\":\"Orejas largas\"}"
+v "dice que no puede ser futura" sí "$(jok 'r.error.includes("no puede ser futura")')"
+t "fecha de nacimiento que no existe" 400 POST /api/mascotas '{"nombre":"Toto","raza":"Mestizo","fechaNacimiento":"2024-02-30","senas":"Orejas largas"}'
+t "sin fecha de nacimiento" 400 POST /api/mascotas '{"nombre":"Toto","raza":"Mestizo","senas":"Orejas largas"}'
+t "edad en vez de fecha (campo viejo)" 400 POST /api/mascotas '{"nombre":"Toto","raza":"Mestizo","edad":3,"senas":"Orejas largas"}'
+t "nombre vacío" 400 POST /api/mascotas '{"raza":"Mestizo","fechaNacimiento":"2023-01-01","senas":"Orejas largas"}'
+t "señas con emoji" 400 POST /api/mascotas '{"nombre":"Toto","raza":"Mestizo","fechaNacimiento":"2023-01-01","senas":"Muy bueno 🐶"}'
 t "cambia el nombre" 200 PATCH /api/mascotas/$NUEVA '{"nombre":"Pampa"}'
 v "nombre nuevo" Pampa "$(jget .nombre)"
 v "el código no cambia" "$CODIGO" "$(jget .codigo)"
@@ -442,7 +461,17 @@ seccion "Mascotas: buscar por código del QR"
 como "$SOFIA"
 t "mascota ajena (Toby, de Lucía)" 200 GET /api/mascotas/codigo/DOGGY-7741-TOBY
 v "es Toby" "4 Toby" "$(jmap 'r.id + " " + r.nombre')"
-v "solo los datos públicos" "codigo,dueno,edad,foto,id,nombre,raza,senas" "$(jmap 'Object.keys(r).sort().join()')"
+v "solo los datos públicos (la edad, no la fecha de nacimiento)" "codigo,dueno,edadMeses,foto,id,nombre,raza,senas" "$(jmap 'Object.keys(r).sort().join()')"
+# La edad la calcula el servidor desde fechaNacimiento: se prueba con fechas relativas a hoy.
+sql "update Mascota set fechaNacimiento = '$(fecha -10d +%Y-%m-%d)T00:00:00.000+00:00' where id = 4;"
+t "Toby nació hace 10 días" 200 GET /api/mascotas/codigo/DOGGY-7741-TOBY
+v "edad: 0 meses (menos de 1 mes)" 0 "$(jget .edadMeses)"
+sql "update Mascota set fechaNacimiento = '$(fecha -40d +%Y-%m-%d)T00:00:00.000+00:00' where id = 4;"
+t "Toby nació hace 40 días" 200 GET /api/mascotas/codigo/DOGGY-7741-TOBY
+v "edad: 1 mes" 1 "$(jget .edadMeses)"
+sql "update Mascota set fechaNacimiento = '$(fecha -3y +%Y-%m-%d)T00:00:00.000+00:00' where id = 4;"
+t "Toby cumplió 3 años hoy" 200 GET /api/mascotas/codigo/DOGGY-7741-TOBY
+v "edad: 36 meses" 36 "$(jget .edadMeses)"
 v "del dueño, solo el nombre (Toby no está perdido)" nombre "$(jmap 'Object.keys(r.dueno).join()')"
 v "nombre de la dueña" Lucía "$(jget .dueno.nombre)"
 t "mascota propia (Luna)" 200 GET /api/mascotas/codigo/DOGGY-8492-LUNA

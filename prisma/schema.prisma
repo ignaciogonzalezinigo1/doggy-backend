@@ -55,8 +55,9 @@ model Mascota {
   tutor   Usuario @relation(fields: [tutorId], references: [id])
   nombre  String
   raza    String
-  /// Edad en años.
-  edad    Int
+  /// Fecha de nacimiento, sin hora (medianoche UTC; se devuelve como AAAA-MM-DD).
+  /// La edad se calcula a partir de ella.
+  fechaNacimiento DateTime
   /// ID único que se codifica en el QR de la chapita: DOGGY-XXXX-NOMBRE.
   codigo  String  @unique
   /// Señas particulares para reconocerla.

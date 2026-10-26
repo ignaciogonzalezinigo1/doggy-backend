@@ -13,6 +13,12 @@
  * hay un formulario que muestre el error debajo del input.
  */
 
+import { aE164 } from './lib/telefonos';
+
+/** Mensaje si el teléfono no es un número real. */
+export const MENSAJE_TELEFONO_INVALIDO =
+  'Teléfono: no es un número válido. Escribilo con la característica, por ejemplo 11 15 4589-2310 o +54 9 11 4589-2310.';
+
 /** Largo máximo de cada campo de texto (el `maxLength` de los inputs de la app). */
 export const LIMITES = {
   nombrePersona: 40,
@@ -58,9 +64,8 @@ const CARACTER_TEXTO_REGEX = new RegExp(`[${LETRAS}0-9 \\n.,;:¡!¿?()"'/+#°º%
 const EMAIL_REGEX =
   /^[A-Za-z0-9](?:[A-Za-z0-9._%+-]*[A-Za-z0-9])?@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
 
-/** Dígitos que puede tener un teléfono. */
-const TELEFONO_MIN_DIGITOS = 8;
-const TELEFONO_MAX_DIGITOS = 15;
+/** Caracteres que puede tener un teléfono escrito a mano: números, espacios, guiones, paréntesis, puntos y "+". */
+const TELEFONO_CARACTERES_REGEX = /^\+?[\d\s\-().]+$/;
 
 /**
  * Antepone el nombre del campo a un mensaje genérico: "Nombre: puede tener hasta 30 caracteres."
@@ -261,11 +266,10 @@ export function validarTelefono(telefono: string): string | undefined {
   if (valor.length > LIMITES.telefono) {
     return conCampo('Teléfono', `Puede tener hasta ${LIMITES.telefono} caracteres.`);
   }
-  if (!/^\+?[\d\s-]+$/.test(valor)) return conCampo('Teléfono', 'Usá solo números, espacios, guiones y "+".');
-  const digitos = valor.replace(/\D/g, '').length;
-  if (digitos < TELEFONO_MIN_DIGITOS || digitos > TELEFONO_MAX_DIGITOS) {
-    return `El teléfono tiene que tener entre ${TELEFONO_MIN_DIGITOS} y ${TELEFONO_MAX_DIGITOS} números.`;
+  if (!TELEFONO_CARACTERES_REGEX.test(valor)) {
+    return conCampo('Teléfono', 'Usá solo números, espacios, guiones, paréntesis y "+".');
   }
+  if (!aE164(valor)) return MENSAJE_TELEFONO_INVALIDO;
   return undefined;
 }
 
@@ -301,21 +305,6 @@ export function validarRaza(texto: string, requerido = true): string | undefined
     max: LIMITES.raza,
     formato: 'nombre',
   });
-}
-
-/**
- * Valida la edad en años: obligatoria, entera y de 0 a `EDAD_MAXIMA`.
- * En la app es un texto; acá llega como número en el JSON.
- * @param valor lo que llegó en el body
- * @returns mensaje de error o undefined
- */
-export function validarEdad(valor: unknown): string | undefined {
-  if (valor === undefined || valor === null || valor === '') return 'Ingresá la edad.';
-  if (typeof valor !== 'number' || !Number.isInteger(valor) || valor < 0) {
-    return conCampo('Edad', 'Solo números.');
-  }
-  if (valor > EDAD_MAXIMA) return conCampo('Edad', `Máximo ${EDAD_MAXIMA}.`);
-  return undefined;
 }
 
 /**
@@ -533,6 +522,34 @@ export function validarFechaAplicacion(fecha: Date): string | undefined {
   if (fecha > hoy()) return 'Una aplicación no puede tener fecha futura.';
   if (fecha < sumarAnios(hoy(), -EDAD_MAXIMA)) return 'Revisá el año: la fecha es demasiado vieja.';
   return undefined;
+}
+
+/**
+ * Valida la fecha de nacimiento de una mascota: no futura y de hace como
+ * mucho `EDAD_MAXIMA` años.
+ * @param fecha fecha de nacimiento (sin hora)
+ * @returns mensaje de error o undefined
+ */
+export function validarFechaNacimiento(fecha: Date): string | undefined {
+  if (fecha > hoy()) return 'La fecha de nacimiento no puede ser futura.';
+  if (fecha < sumarAnios(hoy(), -EDAD_MAXIMA)) {
+    return `Revisá el año: una mascota no puede tener más de ${EDAD_MAXIMA} años.`;
+  }
+  return undefined;
+}
+
+/**
+ * Meses cumplidos entre una fecha sin hora y hoy (la edad de una mascota).
+ * Cuenta un mes más recién cuando se llega al mismo día del mes.
+ * @param desde fecha de nacimiento, a medianoche UTC
+ * @param hasta fecha de referencia (hoy si no se pasa)
+ * @returns los meses cumplidos (0 si todavía no cumplió uno)
+ */
+export function mesesCumplidos(desde: Date, hasta: Date = hoy()): number {
+  const meses =
+    (hasta.getUTCFullYear() - desde.getUTCFullYear()) * 12 + (hasta.getUTCMonth() - desde.getUTCMonth());
+  const ajuste = hasta.getUTCDate() < desde.getUTCDate() ? 1 : 0;
+  return Math.max(0, meses - ajuste);
 }
 
 /**

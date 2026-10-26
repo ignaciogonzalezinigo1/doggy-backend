@@ -9,7 +9,7 @@
  */
 
 import { CLAVES_FOTO_SEED, esValorDe } from '../dominio';
-import { limpiarTexto, conCampo } from '../validaciones';
+import { conCampo, limpiarTexto, parsearSoloFecha } from '../validaciones';
 import { esRutaUpload, existeUpload } from './fotos';
 
 /** Mensaje cuando el id de la URL no es un entero positivo. */
@@ -204,4 +204,20 @@ export function leerPresentes<T>(body: unknown, lectores: Lectores<T>): Partial<
   return Object.fromEntries(
     presentes.map((campo) => [campo, lectores[campo](cuerpo[campo])]),
   ) as Partial<T>;
+}
+
+/** Mensaje de formato de una fecha sin hora. */
+const FORMATO_SOLO_FECHA = 'Usá el formato AAAA-MM-DD con una fecha real.';
+
+/**
+ * Lee una fecha sin hora (AAAA-MM-DD).
+ * @param valor lo que llegó
+ * @param campo nombre del campo
+ * @returns la fecha a medianoche UTC
+ * @throws DatoInvalido si no tiene el formato o el día no existe
+ */
+export function leerSoloFecha(valor: unknown, campo: string): Date {
+  const fecha = typeof valor === 'string' ? parsearSoloFecha(valor) : null;
+  if (!fecha) throw new DatoInvalido(conCampo(campo, FORMATO_SOLO_FECHA));
+  return fecha;
 }

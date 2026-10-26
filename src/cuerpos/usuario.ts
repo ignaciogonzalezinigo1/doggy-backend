@@ -5,6 +5,7 @@
  * minúsculas, como lo normaliza la app. La contraseña no se cambia por acá.
  */
 
+import { normalizarTelefono } from '../lib/telefonos';
 import { leerCuerpo, leerFoto, leerPresentes, leerTexto, type Lectores, type Resultado } from '../lib/entrada';
 import {
   normalizarEmail,
@@ -30,7 +31,8 @@ const LECTORES: Lectores<DatosUsuario> = {
     leerTexto(v, 'Apellido', (t) => validarNombrePersona(t, 'Apellido', 'Ingresá tu apellido.')),
   email: (v) => normalizarEmail(leerTexto(v, 'Email', validarEmail)),
   ubicacion: (v) => leerTexto(v, 'Ubicación', validarUbicacion),
-  telefonoEmergencia: (v) => leerTexto(v, 'Teléfono', validarTelefono),
+  // Se guarda en E.164 (+5491145892310), lo haya escrito como lo haya escrito.
+  telefonoEmergencia: (v) => normalizarTelefono(leerTexto(v, 'Teléfono', validarTelefono)),
   foto: (v) => leerFoto(v),
 };
 

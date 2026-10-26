@@ -90,6 +90,8 @@ No hay claves secretas: el token de sesión es aleatorio y se valida contra la b
 | `npm run db:init` | Aplica el schema a la base (`prisma db push`) y genera el cliente |
 | `npm run db:seed` | Borra los datos y vuelve a cargar los de ejemplo, sin tocar las tablas |
 | `npm run db:reset` | Borra la base, la vuelve a crear con el schema actual, genera el cliente y carga el seed |
+| `npm run db:migrar-fecha-nacimiento` | Pasa una base vieja de `edad` a `fechaNacimiento` sin perder filas (ver abajo) |
+| `npm run db:normalizar-telefonos` | Pasa a E.164 los teléfonos que ya están en la base; los que no entiende los deja como están |
 | `npm run studio` | Abre Prisma Studio para ver y editar la base (ver [Prisma Studio](#prisma-studio)) |
 | `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
 
@@ -103,6 +105,16 @@ npx prisma generate
 ```
 
 `npm run db:init` no alcanza: corre `db push` sin `--accept-data-loss` y Prisma se frena porque la columna tiene datos. La otra opción es `npm run db:reset`, que vuelve a la demo limpia (y suma los datos nuevos del seed, como el reporte "encontrado" de Milo).
+
+**Si ya tenías una `dev.db` de antes de la fecha de nacimiento y los teléfonos en E.164**, después del pull (y de `npm install`, que suma libphonenumber-js) corré, en este orden:
+
+```bash
+cp dev.db dev.db.respaldo                # por las dudas
+npm run db:migrar-fecha-nacimiento       # suma fechaNacimiento (hoy menos la edad), saca edad y Invitacion.vence si quedaba
+npm run db:normalizar-telefonos          # pasa los teléfonos a E.164 y muestra el antes y el después
+```
+
+Conservan todas las filas. Con `db push` solo no alcanza: no puede crear `fechaNacimiento` obligatoria sin valor para las mascotas que ya están. Si preferís empezar de cero, `npm run db:reset` deja la demo limpia, pero **borra tus datos locales**.
 
 ### Prisma Studio
 
@@ -141,12 +153,12 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" | No |
 | POST | `/api/auth/logout` | — | 204 · 401 | Sí |
 | GET | `/api/usuarios/me` | — | 200 Usuario · 401 · 404 | Sí |
-| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia`, `foto` | 200 Usuario · 400 · 401 · 404 · 409 email de otra cuenta | Sí |
+| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia` (cualquier formato habitual; se guarda en E.164), `foto` | 200 Usuario · 400 · 401 · 404 · 409 email de otra cuenta | Sí |
 | POST | `/api/fotos` | `multipart/form-data`, archivo en el campo `foto` (JPG, PNG o WEBP, hasta 5 MB) | 201 `{ "foto": "/uploads/<nombre>.jpg" }` · 400 no vino o no es una imagen válida · 401 · 413 más de 5 MB | Sí |
 | GET | `/uploads/<nombre>` | — | 200 la imagen · 404 | No |
 | GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) · 401 | Sí |
-| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, edad, senas, foto, codigo, dueno: { nombre, telefono? } }` (`telefono` solo si la mascota tiene un `perdido` activo o el usuario está asignado) · 400 no es `DOGGY-XXXX-NOMBRE` · 401 · 404 | Sí |
-| POST | `/api/mascotas` | `nombre`, `raza`, `edad`, `senas`, `foto` (opcional) | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 · 401 | Sí |
+| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, edadMeses, senas, foto, codigo, dueno: { nombre, telefono? } }` (`edadMeses` calculada con la fecha de nacimiento, que no se manda; `telefono` en E.164) (`telefono` solo si la mascota tiene un `perdido` activo o el usuario está asignado) · 400 no es `DOGGY-XXXX-NOMBRE` · 401 · 404 | Sí |
+| POST | `/api/mascotas` | `nombre`, `raza`, `fechaNacimiento` (AAAA-MM-DD, no futura ni de hace más de 30 años), `senas`, `foto` (opcional) | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 · 401 | Sí |
 | PATCH | `/api/mascotas/:id` | los mismos, opcionales (el código no cambia) | 200 Mascota · 400 · 401 · 403 no asignado · 404 | Sí |
 | GET | `/api/registros` | — | 200 RegistroSanitario[] · 401 | Sí |
 | POST | `/api/mascotas/:id/registros` | `tipo`, `nombre`, `fecha` (AAAA-MM-DD), `profesional`, `proximaDosis` (opcional), `fotoEtiqueta` (opcional, solo vacunas) | 201 RegistroSanitario · 400 · 401 · 403 · 404 | Sí |
@@ -202,7 +214,7 @@ curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/
 
 curl -X POST http://localhost:3000/api/mascotas -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer <token>' \
-  -d '{"nombre":"Pampa","raza":"Mestizo","edad":2,"senas":"Mancha blanca en el pecho"}'
+  -d '{"nombre":"Pampa","raza":"Mestizo","fechaNacimiento":"2024-05-10","senas":"Mancha blanca en el pecho"}'
 
 curl -X POST http://localhost:3000/api/fotos -H 'Authorization: Bearer <token>' -F 'foto=@perro.jpg'
 ```
@@ -233,7 +245,7 @@ Usuario ─────────┼──< Cuidador >────────
 | --- | --- | --- |
 | `Usuario` | Cuenta: nombre, apellido, email (único), ubicación, foto, teléfono de emergencia, `passwordHash` | Tiene muchas sesiones, asignaciones (`Cuidador`), mascotas dadas de alta, reportes e invitaciones generadas |
 | `Sesion` | `tokenHash` (SHA-256 del token, único), `vence` | Pertenece a un usuario (se borra con él) |
-| `Mascota` | Nombre, raza, edad, `codigo` (único, el del QR), señas, foto | Pertenece a su tutor (`tutorId`); tiene registros, turnos, cuidadores, reportes e invitaciones |
+| `Mascota` | Nombre, raza, `fechaNacimiento` (sin hora; la edad se calcula), `codigo` (único, el del QR), señas, foto | Pertenece a su tutor (`tutorId`); tiene registros, turnos, cuidadores, reportes e invitaciones |
 | `Cuidador` | `rol` (`dueno` / `invitado`), detalle y tipo del vínculo | Une `Usuario` y `Mascota` (muchos a muchos). `@@unique([mascotaId, usuarioId])`: una persona no se asigna dos veces |
 | `Invitacion` | `token` (8 caracteres, clave primaria), `rol` ofrecido, `usada` (es de un solo uso: no vence) | Pertenece a una mascota y al dueño que la generó |
 | `RegistroSanitario` | Tipo (vacuna, desparasitación, otro), nombre, fecha, profesional, próxima dosis, foto de la etiqueta | Pertenece a una mascota (se borra con ella) |

@@ -32,7 +32,8 @@ export type MascotaRespuesta = {
   tutorId: number;
   nombre: string;
   raza: string;
-  edad: number;
+  /** AAAA-MM-DD. */
+  fechaNacimiento: string;
   codigo: string;
   senas: string;
   foto: string | null;
@@ -46,8 +47,10 @@ export type MascotaRespuesta = {
  */
 export type MascotaPublicaRespuesta = Pick<
   MascotaRespuesta,
-  'id' | 'nombre' | 'raza' | 'edad' | 'senas' | 'foto' | 'codigo'
+  'id' | 'nombre' | 'raza' | 'senas' | 'foto' | 'codigo'
 > & {
+  /** Edad en meses cumplidos, calculada con la fecha de nacimiento (que no se manda). */
+  edadMeses: number;
   dueno: { nombre: string; telefono?: string };
 };
 

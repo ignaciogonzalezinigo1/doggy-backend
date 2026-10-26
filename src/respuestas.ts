@@ -26,6 +26,7 @@ import type {
   Turno,
   Usuario,
 } from './generated/prisma/client';
+import { mesesCumplidos } from './validaciones';
 import type {
   CuidadorRespuesta,
   InvitacionRespuesta,
@@ -129,7 +130,7 @@ export function aMascota(mascota: Mascota): MascotaRespuesta {
     tutorId: mascota.tutorId,
     nombre: mascota.nombre,
     raza: mascota.raza,
-    edad: mascota.edad,
+    fechaNacimiento: soloFecha(mascota.fechaNacimiento),
     codigo: mascota.codigo,
     senas: mascota.senas,
     foto: mascota.foto,
@@ -148,7 +149,7 @@ export function aMascotaPublica(mascota: MascotaConTutor, conTelefono: boolean):
     id: mascota.id,
     nombre: mascota.nombre,
     raza: mascota.raza,
-    edad: mascota.edad,
+    edadMeses: mesesCumplidos(mascota.fechaNacimiento),
     senas: mascota.senas,
     foto: mascota.foto,
     codigo: mascota.codigo,
