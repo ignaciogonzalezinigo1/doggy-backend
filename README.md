@@ -68,11 +68,11 @@ El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de es
 | Valentina Pérez | `valentina.perez@mail.com` | Encontró a Milo por el QR y a un mestizo sin collar en Belgrano |
 | Carlos Romero | `carlos.romero@mail.com` | Co-tutor (dueño) de Luna; publicó el labrador encontrado en Villa Urquiza |
 | Sol Romero | `sol.romero@mail.com` | Dueña de Milo (hogar secundario); busca a Nieve en Villa Urquiza |
-| Marcos Díaz | `marcos.diaz@mail.com` | Paseador de Roco (invitado); busca a Rocky en Núñez |
+| Marcos Díaz | `marcos.diaz@mail.com` | Tutor de Rocky (boxer), perdido en Núñez y encontrado por Martín en Saavedra, todavía sin recuperar: los dos reportes activos, un solo pin con "¡La encontraron!". También es paseador de Roco (invitado) |
 | Vet. San Roque | `contacto@vetsanroque.com` | Clínica invitada en Luna, con teléfono fijo (sin WhatsApp); publicó el salchicha encontrado |
-| Martín López | `martin.lopez@mail.com` | Busca a Simba, perdido en Palermo |
+| Martín López | `martin.lopez@mail.com` | Busca a Simba, perdido en Palermo; encontró a Rocky escaneando su chapita |
 
-Además: 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, y 9 reportes en Palermo, Belgrano, Villa Urquiza, Caballito, Almagro y Núñez. Todos los usuarios, mascotas y reportes tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
+Además: 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, y 10 reportes en Palermo, Belgrano, Villa Urquiza, Caballito, Almagro, Núñez y Saavedra (entre ellos, el perdido de Rocky con su encontrado vinculado). Todos los usuarios, mascotas y reportes tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
 
 ### Variables de entorno
 
@@ -93,7 +93,7 @@ No hay claves secretas: el token de sesión es aleatorio y se valida contra la b
 | `npm run db:seed` | Borra los datos y vuelve a cargar los de ejemplo, sin tocar las tablas |
 | `npm run db:reset` | Borra la base, la vuelve a crear con el schema actual, genera el cliente y carga el seed |
 | `npm run db:migrar-fecha-nacimiento` | Pasa una base vieja de `edad` a `fechaNacimiento` sin perder filas (ver abajo) |
-| `npm run db:normalizar-telefonos` | Pasa a E.164 los teléfonos que ya están en la base; los que no entiende los deja como están |
+| `npm run db:normalizar-telefonos` | Pasa a E.164 los teléfonos que ya están en la base, con la misma regla que la API (celular por defecto; un fijo que ya estaba en E.164 sigue fijo); los que no entiende o son de otro país los deja como están |
 | `npm run studio` | Abre Prisma Studio para ver y editar la base (ver [Prisma Studio](#prisma-studio)) |
 | `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
 
@@ -115,6 +115,8 @@ cp dev.db dev.db.respaldo                # por las dudas
 npm run db:migrar-fecha-nacimiento       # suma fechaNacimiento (hoy menos la edad), saca edad y Invitacion.vence si quedaba
 npm run db:normalizar-telefonos          # pasa los teléfonos a E.164 y muestra el antes y el después
 ```
+
+**Si ya tenías una `dev.db` de antes del resultado de los reportes** (`ReportePerdida.resultado`), alcanza con `npm run db:init`: la columna es opcional, así que `db push` la suma sin `--accept-data-loss` y sin tocar las filas (los reportes cerrados antes quedan sin resultado).
 
 Conservan todas las filas. Con `db push` solo no alcanza: no puede crear `fechaNacimiento` obligatoria sin valor para las mascotas que ya están. Si preferís empezar de cero, `npm run db:reset` deja la demo limpia, pero **borra tus datos locales**.
 
@@ -159,11 +161,11 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | Verbo | Ruta | Body | Status posibles | Sesión |
 | --- | --- | --- | --- | --- |
 | GET | `/api/health` | — | 200 `{ "ok": true }` | No |
-| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `telefonoEmergencia` (obligatorio; se guarda en E.164 como celular), `telefonoFijo` (opcional, `true` para guardarlo como fijo), `password` | 201 `{ usuario, token }` · 400 (también sin teléfono o con uno inválido) · 409 email ya registrado | No |
+| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `telefonoEmergencia` (obligatorio, solo de la Argentina; con o sin 0, 15, 9 o +54; se guarda en E.164 como celular), `telefonoFijo` (opcional, `true` para guardarlo como fijo), `password` | 201 `{ usuario, token }` · 400 (también sin teléfono, con uno inválido o de otro país: "Solo se aceptan teléfonos de Argentina.") · 409 email ya registrado | No |
 | POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" | No |
 | POST | `/api/auth/logout` | — | 204 · 401 | Sí |
 | GET | `/api/usuarios/me` | — | 200 Usuario · 401 · 404 | Sí |
-| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia` (cualquier formato habitual; se guarda en E.164 como celular), `telefonoFijo` (opcional, `true` para guardarlo como fijo), `foto` | 200 Usuario · 400 · 401 · 404 · 409 email de otra cuenta | Sí |
+| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia` (solo de la Argentina, en cualquier formato habitual; se guarda en E.164 como celular), `telefonoFijo` (opcional, `true` para guardarlo como fijo), `foto` | 200 Usuario · 400 (también un teléfono de otro país) · 401 · 404 · 409 email de otra cuenta | Sí |
 | POST | `/api/fotos` | `multipart/form-data`, archivo en el campo `foto` (JPG, PNG o WEBP, hasta 5 MB) | 201 `{ "foto": "/uploads/<nombre>.jpg" }` · 400 no vino o no es una imagen válida · 401 · 413 más de 5 MB | Sí |
 | GET | `/uploads/<nombre>` | — | 200 la imagen · 404 | No |
 | GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) · 401 | Sí |
@@ -180,7 +182,7 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | DELETE | `/api/turnos/:id` | — | 204 · 400 · 401 · 403 · 404 | Sí |
 | GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos, de todos los usuarios; los `encontrado` de una mascota asignada al usuario que publicó otra persona suman `contacto: { nombre, telefono }`) · 401 | Sí |
 | POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros` (solo perdidos), `infoAdicional` (opcional) | 201 ReportePerdida · 400 · 401 · 403 perdido de una mascota no asignada · 404 · 409 ya tiene uno activo del mismo estado (perdido: "Esta mascota ya está reportada como perdida…"; encontrado: "Ya le avisaron a su familia."). Con `mascotaId`, `nombre` y `raza` se toman de la mascota | Sí |
-| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 401 · 403 no es el autor ni está asignado · 404 · 409 ya cerrado | Sí |
+| PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo (el servidor guarda `resultado`: `"devuelta"` si había un encontrado, y cierra los dos; `"aparecio"` si no) | 200 ReportePerdida (cerrado: con `cerradoEn` y `resultado`) · 400 · 401 · 403 no es el autor ni está asignado · 404 · 409 ya cerrado | Sí |
 | GET | `/api/cuidadores` | — | 200 Cuidador[] · 401 | Sí |
 | DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 401 · 403 · 404 · 409 único dueño | Sí |
 | POST | `/api/mascotas/:id/invitaciones` | `rol` (`dueno` o `invitado`) | 201 Invitacion (8 caracteres, de un solo uso) · 400 · 401 · 403 no es dueño · 404 | Sí |
@@ -260,7 +262,7 @@ Usuario ─────────┼──< Cuidador >────────
 | `Invitacion` | `token` (8 caracteres, clave primaria), `rol` ofrecido, `usada` (es de un solo uso: no vence) | Pertenece a una mascota y al dueño que la generó |
 | `RegistroSanitario` | Tipo (vacuna, desparasitación, otro), nombre, fecha, profesional, próxima dosis, foto de la etiqueta | Pertenece a una mascota (se borra con ella) |
 | `Turno` | Categoría, fecha y hora, motivo, lugar | Pertenece a una mascota (se borra con ella) |
-| `ReportePerdida` | Estado (perdido / encontrado), nombre, raza, descripción, foto, `lat`/`lng`, zona, fecha, radio, info adicional, `cerradoEn` | Pertenece a su autor; la mascota es opcional (un encontrado puede ser de un perro sin identificar) |
+| `ReportePerdida` | Estado (perdido / encontrado), nombre, raza, descripción, foto, `lat`/`lng`, zona, fecha, radio, info adicional, `cerradoEn` y `resultado` (opcional: `devuelta` o `aparecio`) | Pertenece a su autor; la mascota es opcional (un encontrado puede ser de un perro sin identificar) |
 | `Etiqueta` | Texto de una etiqueta ("Collar rojo") | Pertenece a un reporte. Tabla aparte porque SQLite no guarda listas; la API la devuelve como `etiquetas: string[]` |
 
 - **Los valores fijos** (`tipo`, `categoria`, `estado`, `rol`) se guardan como `String`, porque SQLite no hace cumplir los enums, y se validan en Express contra las listas de `src/dominio.ts`.
@@ -290,7 +292,7 @@ Corre `scripts/probar.sh`, que prueba la API con `curl` (más de 250 chequeos):
 1. Resetea su propia base, `test.db`, con `npm run db:reset`. El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. Si el script lo corre un agente de IA (por ejemplo, Claude Code), Prisma 7 frena el `--force-reset` y pide que una persona lo confirme: el agente tiene que preguntar y volver a correrlo con `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`. Corrido a mano no pide nada.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre). Las fotos que sube van a una carpeta temporal (`UPLOADS_DIR`), no a `uploads/`.
 3. Hace login con Sofía, Lucía y Carlos y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
-4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos ya usados. También chequea partes del contenido (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: cada formato válido, un texto con extensión `.jpg`, uno de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
+4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos ya usados. Los teléfonos, en todos los formatos aceptados (con o sin 0, 15, 9 o +54), el fijo marcado, números de otros países (400 "Solo se aceptan teléfonos de Argentina.") e inválidos; y que `src/lib/telefonos.ts` sea idéntico a `../doggy/mobile/src/utils/telefonos.ts` (si el repo de la app está al lado). Los reportes: que publicar un encontrado deje activo el perdido, que "Ya volvió a casa" cierre los dos como `devuelta`, que un perdido solo quede `aparecio` y que quien no es el autor ni está asignado no pueda cerrar. También chequea partes del contenido (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: cada formato válido, un texto con extensión `.jpg`, uno de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
 5. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
 6. Baja el servidor al terminar.
 
@@ -314,8 +316,9 @@ doggy-backend/
     ├── cuerpos/          lectura y validación del body de cada recurso
     ├── validaciones.ts   reglas de validación, las mismas que la app
     ├── respuestas.ts     conversión de los modelos al JSON que espera la app
-    ├── dominio.ts        valores válidos de los campos fijos (roles, estados, categorías, radios)
-    ├── lib/              Prisma, sesiones, permisos, fotos, lectura del request, errores y códigos
+    ├── dominio.ts        valores válidos de los campos fijos (roles, estados, resultados, categorías, radios)
+    ├── lib/              Prisma, sesiones, permisos, fotos, lectura del request, errores, códigos y
+    │                     telefonos.ts (la regla de teléfonos, el mismo archivo que la app)
     ├── middlewares/      requiereUsuario: lee el token y pone el usuario de la sesión (401 si no hay)
     └── generated/        cliente generado por Prisma (no se versiona)
 ```
