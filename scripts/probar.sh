@@ -520,6 +520,10 @@ t "fecha de hace 31 años" 400 POST /api/mascotas/1/registros '{"tipo":"vacuna",
 t "día inexistente" 400 POST /api/mascotas/1/registros '{"tipo":"vacuna","nombre":"Antirrábica","fecha":"2026-02-31","profesional":"Vet. San Roque"}'
 t "refuerzo anterior" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$AYER\"}"
 t "refuerzo a 6 años" 400 POST /api/mascotas/1/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"proximaDosis\":\"$(fecha +6y +%Y-%m-%d)\"}"
+t "'otro' sin descripción" 400 POST /api/mascotas/1/registros "{\"tipo\":\"otro\",\"nombre\":\"\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
+v "pide la descripción (el nombre)" sí "$(jok 'r.error.includes("nombre")')"
+t "'otro' con descripción" 201 POST /api/mascotas/1/registros "{\"tipo\":\"otro\",\"nombre\":\"Castración\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
+v "la descripción queda como nombre" "otro Castración" "$(jmap 'r.tipo + " " + r.nombre')"
 t "tipo inválido" 400 POST /api/mascotas/1/registros "{\"tipo\":\"cirugia\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
 t "mascota ajena" 403 POST /api/mascotas/4/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"
 t "mascota no existe" 404 POST /api/mascotas/9999/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\"}"

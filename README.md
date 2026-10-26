@@ -34,13 +34,15 @@ doggy (app) ──HTTP/JSON──► Express ──► Prisma ──► SQLite (
 Requisitos: Node LTS. Para las pruebas, además, `bash` y `curl` (vienen con macOS y, en Windows, con Git Bash).
 
 ```bash
-cp .env.example .env # primero: el postinstall de npm install lo necesita
-npm install          # también genera el cliente de Prisma (postinstall)
+cp .env.example .env # primero: el postinstall de npm ci lo necesita
+npm ci               # también genera el cliente de Prisma (postinstall)
 npm run db:reset     # crea dev.db con el schema y carga los datos de ejemplo
 npm run dev
 ```
 
-El `.env` va antes de `npm install` porque el `postinstall` corre `prisma generate`, y Prisma 7 lee `DATABASE_URL` de `prisma.config.ts` aunque solo vaya a generar el cliente. Sin el `.env` falla con `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`; se arregla copiando el `.env` y corriendo `npx prisma generate` (o `npm install` de nuevo).
+Se usa `npm ci` y no `npm install` porque instala exactamente las versiones del `package-lock.json` sin reescribirlo: todos tienen las mismas dependencias y no aparecen cambios de lockfile por la versión de npm de cada PC. Después de cada pull que cambie dependencias, otra vez `npm ci`.
+
+El `.env` va antes de `npm ci` porque el `postinstall` corre `prisma generate`, y Prisma 7 lee `DATABASE_URL` de `prisma.config.ts` aunque solo vaya a generar el cliente. Sin el `.env` falla con `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`; se arregla copiando el `.env` y corriendo `npx prisma generate` (o `npm ci` de nuevo).
 
 La API queda en `http://localhost:3000`. Para probar que anda: `http://localhost:3000/api/health` responde `{ "ok": true }`.
 
@@ -106,7 +108,7 @@ npx prisma generate
 
 `npm run db:init` no alcanza: corre `db push` sin `--accept-data-loss` y Prisma se frena porque la columna tiene datos. La otra opción es `npm run db:reset`, que vuelve a la demo limpia (y suma los datos nuevos del seed, como el reporte "encontrado" de Milo).
 
-**Si ya tenías una `dev.db` de antes de la fecha de nacimiento y los teléfonos en E.164**, después del pull (y de `npm install`, que suma libphonenumber-js) corré, en este orden:
+**Si ya tenías una `dev.db` de antes de la fecha de nacimiento y los teléfonos en E.164**, después del pull (y de `npm ci`, que suma libphonenumber-js) corré, en este orden:
 
 ```bash
 cp dev.db dev.db.respaldo                # por las dudas
