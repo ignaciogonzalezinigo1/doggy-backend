@@ -159,11 +159,11 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | Verbo | Ruta | Body | Status posibles | Sesión |
 | --- | --- | --- | --- | --- |
 | GET | `/api/health` | — | 200 `{ "ok": true }` | No |
-| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `telefonoEmergencia` (obligatorio; se guarda en E.164), `password` | 201 `{ usuario, token }` · 400 (también sin teléfono o con uno inválido) · 409 email ya registrado | No |
+| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `telefonoEmergencia` (obligatorio; se guarda en E.164 como celular), `telefonoFijo` (opcional, `true` para guardarlo como fijo), `password` | 201 `{ usuario, token }` · 400 (también sin teléfono o con uno inválido) · 409 email ya registrado | No |
 | POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" | No |
 | POST | `/api/auth/logout` | — | 204 · 401 | Sí |
 | GET | `/api/usuarios/me` | — | 200 Usuario · 401 · 404 | Sí |
-| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia` (cualquier formato habitual; se guarda en E.164), `foto` | 200 Usuario · 400 · 401 · 404 · 409 email de otra cuenta | Sí |
+| PATCH | `/api/usuarios/me` | opcionales: `nombre`, `apellido`, `email`, `ubicacion`, `telefonoEmergencia` (cualquier formato habitual; se guarda en E.164 como celular), `telefonoFijo` (opcional, `true` para guardarlo como fijo), `foto` | 200 Usuario · 400 · 401 · 404 · 409 email de otra cuenta | Sí |
 | POST | `/api/fotos` | `multipart/form-data`, archivo en el campo `foto` (JPG, PNG o WEBP, hasta 5 MB) | 201 `{ "foto": "/uploads/<nombre>.jpg" }` · 400 no vino o no es una imagen válida · 401 · 413 más de 5 MB | Sí |
 | GET | `/uploads/<nombre>` | — | 200 la imagen · 404 | No |
 | GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) · 401 | Sí |

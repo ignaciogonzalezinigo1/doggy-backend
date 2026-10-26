@@ -17,7 +17,7 @@ import { aE164 } from './lib/telefonos';
 
 /** Mensaje si el teléfono no es un número real. */
 export const MENSAJE_TELEFONO_INVALIDO =
-  'Teléfono: no es un número válido. Escribilo con la característica, por ejemplo 11 15 4589-2310 o +54 9 11 4589-2310.';
+  'Teléfono: no es un número válido. Escribilo con la característica, por ejemplo 11 4589-2310 o 299 455-4060.';
 
 /** Largo máximo de cada campo de texto (el `maxLength` de los inputs de la app). */
 export const LIMITES = {

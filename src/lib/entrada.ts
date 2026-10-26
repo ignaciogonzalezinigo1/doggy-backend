@@ -224,12 +224,27 @@ export function leerSoloFecha(valor: unknown, campo: string): Date {
 }
 
 /**
- * Lee un teléfono (obligatorio) y lo deja en E.164. Lo usan el registro y el
- * PATCH del perfil, así las dos rutas aceptan y guardan los números igual.
+ * Lee un teléfono (obligatorio) y lo deja en E.164, celular salvo que se
+ * marque como fijo. Lo usan el registro y el PATCH del perfil, así las dos
+ * rutas aceptan y guardan los números igual.
  * @param valor lo que llegó
+ * @param fijo true si vino `telefonoFijo: true` en el mismo body
  * @returns el teléfono en E.164 ("+5491145892310")
  * @throws DatoInvalido si falta o no es un número válido
  */
-export function leerTelefono(valor: unknown): string {
-  return normalizarTelefono(leerTexto(valor, 'Teléfono', validarTelefono));
+export function leerTelefono(valor: unknown, fijo = false): string {
+  return normalizarTelefono(leerTexto(valor, 'Teléfono', validarTelefono), fijo);
+}
+
+/**
+ * Lee `telefonoFijo` ("Es un teléfono fijo"): opcional, false si no viene.
+ * @param body `req.body`
+ * @returns true si el teléfono que vino se guarda como fijo
+ * @throws DatoInvalido si viene y no es booleano
+ */
+export function leerTelefonoFijo(body: unknown): boolean {
+  const { telefonoFijo } = pick(body, ['telefonoFijo']);
+  if (telefonoFijo === undefined || telefonoFijo === null) return false;
+  if (typeof telefonoFijo !== 'boolean') throw new DatoInvalido('Teléfono fijo: tiene que ser true o false.');
+  return telefonoFijo;
 }

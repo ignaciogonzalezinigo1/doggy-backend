@@ -244,6 +244,10 @@ v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r.usuario)')"
 v "id nuevo (no el del body)" sí "$(jok 'r.usuario.id > 20')"
 v "la contraseña se guarda hasheada" 1 "$(sql "select passwordHash like '\$2%' from Usuario where id = $NUEVO_ID;")"
 v "el teléfono se guarda en E.164" +5491145892310 "$(jget .usuario.telefonoEmergencia)"
+t "registro con teléfono fijo marcado" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Fijo","email":"ana.fijo@mail.com","telefonoEmergencia":"011 4777-3020","telefonoFijo":true,"password":"perro1234"}'
+v "se guarda como fijo" +541147773020 "$(jget .usuario.telefonoEmergencia)"
+t "registro con celular sin 15" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Celular","email":"ana.celu@mail.com","telefonoEmergencia":"2994554060","password":"perro1234"}'
+v "se guarda como celular" +5492994554060 "$(jget .usuario.telefonoEmergencia)"
 t "registro sin teléfono" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","password":"perro1234"}'
 v "pide el teléfono" "Ingresá un teléfono de contacto." "$(jget .error)"
 t "registro con teléfono inválido" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","telefonoEmergencia":"11 1234","password":"perro1234"}'
@@ -410,15 +414,24 @@ t "teléfono corto" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"123"}'
 v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
 t "teléfono con letras" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 4589-23AB"}'
 t "teléfono que no existe (11 1234)" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 1234"}'
-# El mismo celular escrito de cuatro formas distintas se guarda igual, en E.164.
-for formato in "+54 9 11 4589-2310" "011 15 4589-2310" "11 15 4589-2310" "+5491145892310"; do
-  t "teléfono \"$formato\"" 200 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
-  v "se guarda en E.164" +5491145892310 "$(jget .telefonoEmergencia)"
+# Celular por defecto: el mismo número escrito de cualquier forma se guarda igual, con el 9.
+for formato in "2994554060" "299 455-4060" "0299 15 455-4060" "299 15 4554060" "+54 299 455 4060" "+54 9 299 455-4060" "5492994554060"; do
+  t "celular \"$formato\"" 200 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
+  v "se guarda como celular" +5492994554060 "$(jget .telefonoEmergencia)"
 done
-t "fijo sin 9 ni 15 (11 4589-2310)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 4589-2310"}'
-v "es otro número: el fijo" +541145892310 "$(jget .telefonoEmergencia)"
-t "fijo con paréntesis ((011) 4777-3020)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020"}'
-v "se guarda en E.164" +541147773020 "$(jget .telefonoEmergencia)"
+for formato in "1145892310" "11 4589-2310" "011 15 4589-2310" "+54 9 11 4589-2310"; do
+  t "celular de CABA \"$formato\"" 200 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
+  v "se guarda como celular" +5491145892310 "$(jget .telefonoEmergencia)"
+done
+t "característica de 4 dígitos (2966 421234)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2966 421234"}'
+v "se guarda como celular" +5492966421234 "$(jget .telefonoEmergencia)"
+t "fijo marcado (011) 4777-3020" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020","telefonoFijo":true}'
+v "se guarda como fijo, sin el 9" +541147773020 "$(jget .telefonoEmergencia)"
+t "fijo marcado escrito con el 15" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"0299 15 455-4060","telefonoFijo":true}'
+v "se guarda como fijo, sin el 9" +542994554060 "$(jget .telefonoEmergencia)"
+t "telefonoFijo que no es booleano" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"2994554060","telefonoFijo":"sí"}'
+t "número extranjero" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"+34 612 345 678"}'
+v "queda como es" +34612345678 "$(jget .telefonoEmergencia)"
 t "body vacío" 400 PATCH /api/usuarios/me '{}'
 t "email de otra cuenta" 409 PATCH /api/usuarios/me '{"email":"lucia.gomez@mail.com"}'
 t "foto con URI del celular" 400 PATCH /api/usuarios/me '{"foto":"file:///var/mobile/perro.jpg"}'

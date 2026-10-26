@@ -2,7 +2,8 @@
  * Lectura del body de POST /api/auth/registro y POST /api/auth/login.
  *
  * Mismas reglas que las pantallas de registro y login de la app. El email se
- * guarda en minúsculas y el teléfono (obligatorio en el registro), en E.164. La contraseña no pasa por `limpiarTexto`: se toma tal
+ * guarda en minúsculas y el teléfono (obligatorio en el registro), en E.164:
+ * celular, salvo que venga `telefonoFijo: true`. La contraseña no pasa por `limpiarTexto`: se toma tal
  * cual llegó, porque los espacios cuentan (y en una nueva están prohibidos).
  */
 
@@ -11,6 +12,7 @@ import {
   exigir,
   leerCuerpo,
   leerTelefono,
+  leerTelefonoFijo,
   leerTexto,
   leerTodos,
   type Lectores,
@@ -63,14 +65,19 @@ function leerEmail(valor: unknown): string {
   return normalizarEmail(leerTexto(valor, 'Email', validarEmail));
 }
 
-const LECTORES_REGISTRO: Lectores<DatosRegistro> = {
+/**
+ * Lectores del registro.
+ * @param fijo true si el teléfono se guarda como fijo (`telefonoFijo: true`)
+ * @returns un lector por campo
+ */
+const lectoresRegistro = (fijo: boolean): Lectores<DatosRegistro> => ({
   nombre: (v) => leerTexto(v, 'Nombre', (t) => validarNombrePersona(t, 'Nombre', 'Ingresá tu nombre.')),
   apellido: (v) =>
     leerTexto(v, 'Apellido', (t) => validarNombrePersona(t, 'Apellido', 'Ingresá tu apellido.')),
   email: leerEmail,
-  telefonoEmergencia: leerTelefono,
+  telefonoEmergencia: (v) => leerTelefono(v, fijo),
   password: (v) => leerPassword(v, validarPasswordNueva),
-};
+});
 
 const LECTORES_LOGIN: Lectores<DatosLogin> = {
   email: leerEmail,
@@ -83,7 +90,7 @@ const LECTORES_LOGIN: Lectores<DatosLogin> = {
  * @returns los datos validados o el error del 400
  */
 export function leerRegistro(body: unknown): Resultado<DatosRegistro> {
-  return leerCuerpo(() => leerTodos(body, LECTORES_REGISTRO));
+  return leerCuerpo(() => leerTodos(body, lectoresRegistro(leerTelefonoFijo(body))));
 }
 
 /**
