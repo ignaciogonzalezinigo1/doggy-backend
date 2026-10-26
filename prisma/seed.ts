@@ -16,7 +16,8 @@
  *
  * Las pruebas (`npm test`) parten de estos datos: Sofía (1) tiene a Luna,
  * Roco y Milo (1 a 3), Lucía (20) a Toby (4), Roco tiene una sola dueña, y
- * ninguna de esas cuatro mascotas está reportada como perdida.
+ * ninguna de esas cuatro mascotas está reportada como perdida. Rocky (6), de
+ * Marcos, está perdido y con un encontrado de Martín todavía sin recuperar.
  */
 
 import bcrypt from 'bcryptjs';
@@ -41,6 +42,7 @@ const JULIAN_ID = 4;
 const CARLOS_ID = 11;
 /** La clínica: teléfono fijo, sin WhatsApp. */
 const VETERINARIA_ID = 12;
+/** Tutor de Rocky: perdido en Núñez y encontrado por Martín, todavía sin recuperar. */
 const MARCOS_ID = 13;
 const SOL_ID = 14;
 /** Tutora de Toby: generó el código de asignación TOBY2026 para Sofía. */
@@ -240,6 +242,17 @@ const mascotas = [
     senas: 'Negra y blanca, con la cara partida en dos colores. Collar azul con chapita.',
     foto: 'pipa',
   },
+  // Perdido y encontrado: en el mapa es un solo pin, con "¡La encontraron!".
+  {
+    id: 6,
+    tutorId: MARCOS_ID,
+    nombre: 'Rocky',
+    raza: 'Boxer',
+    fechaNacimiento: dia('2019-11-12'),
+    codigo: 'DOGGY-1953-ROCKY',
+    senas: 'Boxer atigrado con el pecho blanco. Collar de cuero marrón.',
+    foto: 'rocky',
+  },
 ];
 
 /**
@@ -379,9 +392,10 @@ const reportes = [
     zona: 'Almagro, CABA',
     fecha: haceHoras(8),
   },
+  // Rocky sigue perdido aunque Martín lo encontró (reporte 10): espera que Marcos lo recupere.
   {
     id: 7,
-    mascotaId: null,
+    mascotaId: 6,
     autorId: MARCOS_ID,
     estado: 'perdido',
     nombre: 'Rocky',
@@ -425,6 +439,22 @@ const reportes = [
     zona: 'Palermo, CABA',
     fecha: haceHoras(12),
   },
+  // Martín escaneó la chapita de Rocky: no se dibuja aparte, se ve en el detalle del perdido.
+  {
+    id: 10,
+    mascotaId: 6,
+    autorId: MARTIN_ID,
+    estado: 'encontrado',
+    nombre: 'Rocky',
+    raza: 'Boxer',
+    descripcion: 'Estaba atado en la puerta de un kiosco, con la chapita puesta. Lo tenemos en casa.',
+    foto: 'rocky',
+    etiquetas: ['Chapita Doggy'],
+    lat: -34.5531,
+    lng: -58.4802,
+    zona: 'Saavedra, CABA',
+    fecha: haceHoras(3),
+  },
 ];
 
 /** Asignaciones de personas a mascotas. El nombre y la foto salen del usuario. */
@@ -445,6 +475,7 @@ const cuidadores = [
   { id: 7, mascotaId: 3, usuarioId: SOL_ID, rol: 'dueno', detalle: 'Hogar secundario', tipo: 'familia' },
   { id: 8, mascotaId: 4, usuarioId: LUCIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
   { id: 9, mascotaId: 5, usuarioId: JULIAN_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
+  { id: 10, mascotaId: 6, usuarioId: MARCOS_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
 ];
 
 /**
@@ -494,9 +525,14 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
     mostrar: 'Ve a Luna y su carnet; publicó el labrador encontrado en Villa Urquiza.',
   },
   {
-    email: 'martin.lopez@mail.com / marcos.diaz@mail.com / sol.romero@mail.com',
-    quien: 'Martín, Marcos y Sol',
-    mostrar: 'Perdidos sin chapita: Simba (Palermo), Rocky (Núñez) y Nieve (Villa Urquiza).',
+    email: 'marcos.diaz@mail.com',
+    quien: 'Marcos, tutor de Rocky (perdido en Núñez, encontrado por Martín en Saavedra)',
+    mostrar: 'Perdidos: un solo pin de Rocky con "¡La encontraron!" y el hallazgo en el detalle; "Ya volvió a casa" cierra los dos como "Devuelta a su familia".',
+  },
+  {
+    email: 'martin.lopez@mail.com / sol.romero@mail.com',
+    quien: 'Martín y Sol',
+    mostrar: 'Perdidos sin chapita: Simba (Palermo) y Nieve (Villa Urquiza). Martín publicó el encontrado de Rocky.',
   },
 ];
 

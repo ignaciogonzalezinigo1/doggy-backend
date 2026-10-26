@@ -12,6 +12,7 @@ import {
   CATEGORIAS_TURNO,
   ESTADOS_REPORTE,
   esValorDe,
+  RESULTADOS_REPORTE,
   ROLES_MASCOTA,
   TIPOS_CUIDADOR,
   TIPOS_REGISTRO,
@@ -221,6 +222,10 @@ export function aReporte(
     ...(reporte.radioMetros !== null && { radioMetros: reporte.radioMetros }),
     ...(reporte.infoAdicional !== null && { infoAdicional: reporte.infoAdicional }),
     ...(contacto && { contacto }),
+    ...(reporte.cerradoEn !== null && { cerradoEn: reporte.cerradoEn.toISOString() }),
+    ...(reporte.resultado !== null && {
+      resultado: valorDe(RESULTADOS_REPORTE, reporte.resultado, 'ReportePerdida.resultado'),
+    }),
   };
 }
 

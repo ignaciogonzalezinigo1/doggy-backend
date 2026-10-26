@@ -10,6 +10,7 @@
 import type {
   CategoriaTurno,
   EstadoReporte,
+  ResultadoReporte,
   RolMascota,
   TipoCuidador,
   TipoRegistro,
@@ -98,6 +99,10 @@ export type ReporteRespuesta = {
    * los `encontrado` de mascotas asignadas al usuario que publicó otra persona.
    */
   contacto?: { nombre: string; telefono: string };
+  /** Cuándo se cerró. Solo en un reporte cerrado (la respuesta del PATCH que lo cierra). */
+  cerradoEn?: string;
+  /** Cómo terminó: "devuelta" o "aparecio". Solo en un reporte cerrado. */
+  resultado?: ResultadoReporte;
 };
 
 /** Persona asignada a una mascota, con nombre y foto tomados del usuario. */

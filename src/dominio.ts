@@ -20,6 +20,15 @@ export const ESTADOS_REPORTE = ['perdido', 'encontrado'] as const;
 export type EstadoReporte = (typeof ESTADOS_REPORTE)[number];
 
 /**
+ * Cómo terminó un reporte cerrado (`ReportePerdida.resultado`).
+ * - devuelta: alguien la encontró y volvió con su familia (se cierran el
+ *   perdido y el encontrado de la mascota).
+ * - aparecio: se cerró un perdido sin ningún encontrado ("Ya apareció").
+ */
+export const RESULTADOS_REPORTE = ['devuelta', 'aparecio'] as const;
+export type ResultadoReporte = (typeof RESULTADOS_REPORTE)[number];
+
+/**
  * Roles sobre una mascota (`Cuidador.rol`, `Invitacion.rol`).
  * - dueno: puede generar códigos de asignación.
  * - invitado: tiene la mascota en su cuenta pero no puede asignar a nadie.

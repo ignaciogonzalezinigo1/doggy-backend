@@ -127,6 +127,11 @@ model ReportePerdida {
   /// Cuándo se cerró ("Ya apareció"). Null mientras está activo. Los cerrados
   /// no se borran, para guardar el historial, pero GET /api/reportes no los devuelve.
   cerradoEn     DateTime?
+  /// Cómo terminó, uno de RESULTADOS_REPORTE: "devuelta" (volvió con su familia
+  /// después de un encontrado) o "aparecio" (se cerró un perdido sin encontrado).
+  /// Null mientras está activo y en un encontrado que cerró su autor sin estar
+  /// asignado a la mascota.
+  resultado     String?
 
   /// La API las devuelve como `etiquetas: string[]`.
   etiquetas Etiqueta[]

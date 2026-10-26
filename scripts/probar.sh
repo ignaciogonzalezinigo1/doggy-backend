@@ -372,7 +372,8 @@ v "fechas sin hora (AAAA-MM-DD)" sí "$(jok 'r.every((x) => /^\d{4}-\d{2}-\d{2}$
 t "turnos de las mascotas asignadas" 200 GET /api/turnos
 v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4)')"
 t "reportes activos" 200 GET /api/reportes
-v "los 9 del seed, con etiquetas como lista" sí "$(jok 'r.length === 9 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "los 10 del seed, con etiquetas como lista" sí "$(jok 'r.length === 10 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "Rocky: el perdido y el encontrado de Martín, los dos activos" "perdido,encontrado" "$(jmap 'r.filter((x) => x.mascotaId === 6).map((x) => x.estado).join()')"
 v "solo el encontrado de Milo trae contacto" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
 v "es el de Valentina, que lo encontró (en E.164)" "Valentina +5491162749031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
 como "$LUCIA"
@@ -416,7 +417,6 @@ t "teléfono corto" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"123"}'
 v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
 t "teléfono con letras" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 4589-23AB"}'
 t "teléfono que no existe (11 1234)" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 1234"}'
-# Celular por defecto: el mismo número escrito de cualquier forma se guarda igual, con el 9.
 t "característica que no existe (351 123-4567)" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"351 123-4567"}'
 v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
 # La regla de teléfonos es un solo archivo, copiado igual en la app y en la API.
@@ -426,6 +426,7 @@ if [ -f "$COPIA_APP" ]; then
 else
   echo "Aviso: no está ../doggy, no se compara la copia de telefonos.ts de la app." >&2
 fi
+# Celular por defecto: el mismo número escrito de cualquier forma se guarda igual, con el 9.
 for formato in "2994554060" "299 455-4060" "0299 15 455-4060" "299 15 4554060" "+54 299 455 4060" "+54 9 299 455-4060" "54 9 299 455-4060" "5492994554060" "0054 9 299 455-4060" "+549 299 4554060"; do
   t "celular \"$formato\"" 200 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
   v "se guarda como celular" +5492994554060 "$(jget .telefonoEmergencia)"
@@ -436,13 +437,13 @@ for formato in "1145892310" "11 4589-2310" "011 15 4589-2310" "+54 9 11 4589-231
 done
 t "característica de 4 dígitos (2966 421234)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2966 421234"}'
 v "se guarda como celular" +5492966421234 "$(jget .telefonoEmergencia)"
-t "fijo marcado (011) 4777-3020" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020","telefonoFijo":true}'
 t "característica de 3 dígitos (351 423-4567)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"351 423-4567"}'
 v "se guarda como celular" +5493514234567 "$(jget .telefonoEmergencia)"
 t "característica de 4 dígitos (3543 41-2345)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"3543 41-2345"}'
 v "se guarda como celular" +5493543412345 "$(jget .telefonoEmergencia)"
 t "característica 2944 (2944 41-2345)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2944 41-2345"}'
 v "se guarda como celular" +5492944412345 "$(jget .telefonoEmergencia)"
+t "fijo marcado (011) 4777-3020" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020","telefonoFijo":true}'
 v "se guarda como fijo, sin el 9" +541147773020 "$(jget .telefonoEmergencia)"
 t "fijo marcado escrito con el 15" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"0299 15 455-4060","telefonoFijo":true}'
 v "se guarda como fijo, sin el 9" +542994554060 "$(jget .telefonoEmergencia)"
@@ -643,18 +644,63 @@ t "nuevo perdido de Roco tras cerrar" 201 POST /api/reportes "{\"estado\":\"perd
 
 # Quién edita o cierra un reporte: el autor o alguien asignado a la mascota.
 R_CARLOS=$(reporte_de 11 1 perdido Luna)   # Carlos, co-dueño de Luna
-R_QR=$(reporte_de 3 1 encontrado Luna)     # Valentina encontró a Luna por el QR
 R_TOBY=$(reporte_de 20 4 perdido Toby)     # Lucía, dueña de Toby
 t "perdido de Luna publicado por Carlos: lo edita la dueña" 200 PATCH /api/reportes/$R_CARLOS '{"zona":"Villa Crespo, CABA"}'
 v "el autor sigue siendo Carlos" 11 "$(jget .autorId)"
 t "perdido de Luna publicado por Carlos: lo cierra la dueña" 200 PATCH /api/reportes/$R_CARLOS '{"cerrado":true}'
+v "sin encontrado: Apareció" aparecio "$(jget .resultado)"
+R_QR=$(reporte_de 3 1 encontrado Luna)     # Valentina encontró a Luna por el QR
 t "encontrado de Luna (QR) de otra persona: lo cierra la dueña" 200 PATCH /api/reportes/$R_QR '{"cerrado":true}'
+v "Devuelta a su familia" devuelta "$(jget .resultado)"
 t "encontrado de Milo del seed: Ya la recuperé" 200 PATCH /api/reportes/4 '{"cerrado":true}'
+v "Devuelta a su familia, con la fecha" "devuelta sí" "$(jget .resultado) $(jok 'typeof r.cerradoEn === "string"')"
 t "encontrado sin mascota de otro autor: cerrar" 403 PATCH /api/reportes/2 '{"cerrado":true}'
 t "encontrado sin mascota de otro autor: editar" 403 PATCH /api/reportes/2 '{"zona":"Palermo, CABA"}'
 t "perdido de Toby sin tenerlo asignado" 403 PATCH /api/reportes/$R_TOBY '{"zona":"Palermo, CABA"}'
 t "encontrado propio de mascota ajena: lo edita el autor" 200 PATCH /api/reportes/$QR_PROPIO '{"descripcion":"Pelo blanco con rulos, sin collar"}'
 t "encontrado de mascota registrada: el nombre no se edita" 400 PATCH /api/reportes/$QR_PROPIO '{"nombre":"Firulais"}'
+
+seccion "Reportes: perdido hasta que la familia la recupera"
+# Un perdido de Luna (Sofía) y el encontrado de Lucía, que no está asignada a Luna.
+PERDIDO_LUNA="{\"estado\":\"perdido\",\"mascotaId\":1,\"descripcion\":\"Collar rojo con chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
+ENCONTRADO_LUNA="{\"estado\":\"encontrado\",\"mascotaId\":1,\"descripcion\":\"Estaba en la plaza con la chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.57,\"lng\":-58.43,\"zona\":\"Colegiales, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+# Estado de un reporte en la base: "<resultado>|<1 si está cerrado>".
+cierre_de() { sql "select resultado, cerradoEn is not null from ReportePerdida where id = $1;"; }
+como "$SOFIA"
+t "perdido de Luna" 201 POST /api/reportes "$PERDIDO_LUNA"
+P_LUNA=$(jget .id)
+como "$LUCIA"
+t "encontrado de Luna con el perdido activo" 201 POST /api/reportes "$ENCONTRADO_LUNA"
+E_LUNA=$(jget .id)
+t "reportes activos después del encontrado" 200 GET /api/reportes
+v "el perdido sigue activo" sí "$(jok "r.some((x) => x.id === $P_LUNA)")"
+v "y el encontrado también" sí "$(jok "r.some((x) => x.id === $E_LUNA)")"
+v "el perdido no se cerró en la base" "|0" "$(cierre_de "$P_LUNA")"
+t "quien no es dueña ni está asignada: cerrar el perdido" 403 PATCH /api/reportes/$P_LUNA '{"cerrado":true}'
+v "el perdido sigue abierto" "|0" "$(cierre_de "$P_LUNA")"
+como "$SOFIA"
+t "Ya volvió a casa (cierra el encontrado)" 200 PATCH /api/reportes/$E_LUNA '{"cerrado":true}'
+v "Devuelta a su familia, con la fecha" "devuelta sí" "$(jget .resultado) $(jok 'typeof r.cerradoEn === "string"')"
+v "el perdido se cerró con el mismo resultado" "devuelta|1" "$(cierre_de "$P_LUNA")"
+v "con la misma fecha" 1 "$(sql "select count(distinct cerradoEn) from ReportePerdida where id in ($P_LUNA, $E_LUNA);")"
+t "reportes activos después de recuperarla" 200 GET /api/reportes
+v "no sale ninguno de los dos" sí "$(jok "!r.some((x) => x.id === $P_LUNA || x.id === $E_LUNA)")"
+# Desde el perdido ("Ya apareció" con un encontrado activo) también es Devuelta y cierra los dos.
+t "otro perdido de Luna" 201 POST /api/reportes "$PERDIDO_LUNA"
+P_LUNA=$(jget .id)
+como "$LUCIA"
+t "otro encontrado de Luna" 201 POST /api/reportes "$ENCONTRADO_LUNA"
+E_LUNA=$(jget .id)
+como "$CARLOS"
+t "el co-dueño cierra el perdido" 200 PATCH /api/reportes/$P_LUNA '{"cerrado":true}'
+v "Devuelta a su familia" devuelta "$(jget .resultado)"
+v "el encontrado se cerró con el mismo resultado" "devuelta|1" "$(cierre_de "$E_LUNA")"
+como "$SOFIA"
+t "perdido de Luna sin encontrado" 201 POST /api/reportes "$PERDIDO_LUNA"
+P_LUNA=$(jget .id)
+t "Ya apareció" 200 PATCH /api/reportes/$P_LUNA '{"cerrado":true}'
+v "Apareció" aparecio "$(jget .resultado)"
+v "guardado en la base" "aparecio|1" "$(cierre_de "$P_LUNA")"
 
 seccion "Invitaciones y cuidadores"
 t "genera código (dueña de Luna)" 201 POST /api/mascotas/1/invitaciones '{"rol":"invitado"}'
