@@ -236,24 +236,29 @@ seccion "Auth: registro"
 como ""
 t "API levantada (pública)" 200 GET /api/health
 v "responde { ok: true }" true "$(jget .ok)"
-t "registro válido" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":" Ana.Ruiz@MAIL.com ","password":"perro1234","passwordHash":"x","id":1}'
+t "registro válido" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":" Ana.Ruiz@MAIL.com ","telefonoEmergencia":"11 15 4589-2310","password":"perro1234","passwordHash":"x","id":1}'
 NUEVO_TOKEN=$(jget .token); NUEVO_ID=$(jget .usuario.id)
 v "devuelve un token" sí "$(jok 'typeof r.token === "string" && r.token.length >= 32')"
 v "email limpio y en minúsculas" ana.ruiz@mail.com "$(jget .usuario.email)"
 v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r.usuario)')"
 v "id nuevo (no el del body)" sí "$(jok 'r.usuario.id > 20')"
 v "la contraseña se guarda hasheada" 1 "$(sql "select passwordHash like '\$2%' from Usuario where id = $NUEVO_ID;")"
-t "email ya registrado (otras mayúsculas)" 409 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ANA.RUIZ@mail.com","password":"perro1234"}'
-t "email de una cuenta del seed" 409 POST /api/auth/registro '{"nombre":"Sofía","apellido":"Romero","email":"sofia.romero@mail.com","password":"perro1234"}'
-t "contraseña de 7 caracteres" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perro12"}'
-t "contraseña sin números" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perroperro"}'
+v "el teléfono se guarda en E.164" +5491145892310 "$(jget .usuario.telefonoEmergencia)"
+t "registro sin teléfono" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","password":"perro1234"}'
+v "pide el teléfono" "Ingresá un teléfono de contacto." "$(jget .error)"
+t "registro con teléfono inválido" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","telefonoEmergencia":"11 1234","password":"perro1234"}'
+v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
+t "email ya registrado (otras mayúsculas)" 409 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ANA.RUIZ@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
+t "email de una cuenta del seed" 409 POST /api/auth/registro '{"nombre":"Sofía","apellido":"Romero","email":"sofia.romero@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
+t "contraseña de 7 caracteres" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro12"}'
+t "contraseña sin números" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perroperro"}'
 v "mensaje de la app" "Usá al menos una letra y un número." "$(jget .error)"
-t "contraseña con espacios" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":"perro 1234"}'
-t "contraseña de 65 caracteres" 400 POST /api/auth/registro "{\"nombre\":\"Ana\",\"apellido\":\"Ruiz\",\"email\":\"ana2@mail.com\",\"password\":\"a1$(printf 'x%.0s' $(seq 63))\"}"
-t "contraseña que no es texto" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","password":12345678}'
-t "nombre con números" 400 POST /api/auth/registro '{"nombre":"Ana2","apellido":"Ruiz","email":"ana2@mail.com","password":"perro1234"}'
-t "apellido vacío" 400 POST /api/auth/registro '{"nombre":"Ana","email":"ana2@mail.com","password":"perro1234"}'
-t "email inválido" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana@mail","password":"perro1234"}'
+t "contraseña con espacios" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro 1234"}'
+t "contraseña de 65 caracteres" 400 POST /api/auth/registro "{\"nombre\":\"Ana\",\"apellido\":\"Ruiz\",\"email\":\"ana2@mail.com\",\"telefonoEmergencia\":\"11 15 4589-2310\",\"password\":\"a1$(printf 'x%.0s' $(seq 63))\"}"
+t "contraseña que no es texto" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":12345678}'
+t "nombre con números" 400 POST /api/auth/registro '{"nombre":"Ana2","apellido":"Ruiz","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
+t "apellido vacío" 400 POST /api/auth/registro '{"nombre":"Ana","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
+t "email inválido" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana@mail","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
 como "$NUEVO_TOKEN"
 t "el token del registro sirve" 200 GET /api/usuarios/me
 v "es la cuenta nueva" "$NUEVO_ID" "$(jget .id)"

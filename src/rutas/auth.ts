@@ -24,7 +24,7 @@ const MENSAJE_LOGIN_INCORRECTO = 'Email o contraseña incorrectos';
  * Datos del perfil que el registro no pide. Quedan vacíos y el usuario los
  * completa después desde Editar perfil (PATCH /api/usuarios/me).
  */
-const PERFIL_INICIAL = { ubicacion: '', telefonoEmergencia: '', foto: null };
+const PERFIL_INICIAL = { ubicacion: '', foto: null };
 
 /**
  * POST /api/auth/registro: crea una cuenta y abre su sesión.

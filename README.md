@@ -149,7 +149,7 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | Verbo | Ruta | Body | Status posibles | Sesión |
 | --- | --- | --- | --- | --- |
 | GET | `/api/health` | — | 200 `{ "ok": true }` | No |
-| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `password` | 201 `{ usuario, token }` · 400 · 409 email ya registrado | No |
+| POST | `/api/auth/registro` | `nombre`, `apellido`, `email`, `telefonoEmergencia` (obligatorio; se guarda en E.164), `password` | 201 `{ usuario, token }` · 400 (también sin teléfono o con uno inválido) · 409 email ya registrado | No |
 | POST | `/api/auth/login` | `email`, `password` | 200 `{ usuario, token }` · 400 · 401 "Email o contraseña incorrectos" | No |
 | POST | `/api/auth/logout` | — | 204 · 401 | Sí |
 | GET | `/api/usuarios/me` | — | 200 Usuario · 401 · 404 | Sí |

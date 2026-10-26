@@ -9,8 +9,9 @@
  */
 
 import { CLAVES_FOTO_SEED, esValorDe } from '../dominio';
-import { conCampo, limpiarTexto, parsearSoloFecha } from '../validaciones';
+import { conCampo, limpiarTexto, parsearSoloFecha, validarTelefono } from '../validaciones';
 import { esRutaUpload, existeUpload } from './fotos';
+import { normalizarTelefono } from './telefonos';
 
 /** Mensaje cuando el id de la URL no es un entero positivo. */
 export const MENSAJE_ID_INVALIDO = 'El id no es válido.';
@@ -220,4 +221,15 @@ export function leerSoloFecha(valor: unknown, campo: string): Date {
   const fecha = typeof valor === 'string' ? parsearSoloFecha(valor) : null;
   if (!fecha) throw new DatoInvalido(conCampo(campo, FORMATO_SOLO_FECHA));
   return fecha;
+}
+
+/**
+ * Lee un teléfono (obligatorio) y lo deja en E.164. Lo usan el registro y el
+ * PATCH del perfil, así las dos rutas aceptan y guardan los números igual.
+ * @param valor lo que llegó
+ * @returns el teléfono en E.164 ("+5491145892310")
+ * @throws DatoInvalido si falta o no es un número válido
+ */
+export function leerTelefono(valor: unknown): string {
+  return normalizarTelefono(leerTexto(valor, 'Teléfono', validarTelefono));
 }

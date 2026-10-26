@@ -2,11 +2,20 @@
  * Lectura del body de POST /api/auth/registro y POST /api/auth/login.
  *
  * Mismas reglas que las pantallas de registro y login de la app. El email se
- * guarda en minúsculas. La contraseña no pasa por `limpiarTexto`: se toma tal
+ * guarda en minúsculas y el teléfono (obligatorio en el registro), en E.164. La contraseña no pasa por `limpiarTexto`: se toma tal
  * cual llegó, porque los espacios cuentan (y en una nueva están prohibidos).
  */
 
-import { DatoInvalido, exigir, leerCuerpo, leerTexto, leerTodos, type Lectores, type Resultado } from '../lib/entrada';
+import {
+  DatoInvalido,
+  exigir,
+  leerCuerpo,
+  leerTelefono,
+  leerTexto,
+  leerTodos,
+  type Lectores,
+  type Resultado,
+} from '../lib/entrada';
 import {
   conCampo,
   normalizarEmail,
@@ -21,6 +30,8 @@ export type DatosRegistro = {
   nombre: string;
   apellido: string;
   email: string;
+  /** En E.164. */
+  telefonoEmergencia: string;
   password: string;
 };
 
@@ -57,6 +68,7 @@ const LECTORES_REGISTRO: Lectores<DatosRegistro> = {
   apellido: (v) =>
     leerTexto(v, 'Apellido', (t) => validarNombrePersona(t, 'Apellido', 'Ingresá tu apellido.')),
   email: leerEmail,
+  telefonoEmergencia: leerTelefono,
   password: (v) => leerPassword(v, validarPasswordNueva),
 };
 
