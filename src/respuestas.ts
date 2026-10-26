@@ -46,6 +46,12 @@ type UsuarioLeido = Omit<Usuario, 'passwordHash'>;
 /** Reporte con sus etiquetas incluidas (`include: { etiquetas: true }`). */
 export type ReporteConEtiquetas = ReportePerdida & { etiquetas: Etiqueta[] };
 
+/** Mascota con el nombre y el teléfono de su tutor (`include: INCLUIR_TUTOR`). */
+export type MascotaConTutor = Mascota & { tutor: Pick<Usuario, 'nombre' | 'telefonoEmergencia'> };
+
+/** Lo que hay que incluir al consultar una mascota para pasarla por `aMascotaPublica`. */
+export const INCLUIR_TUTOR = { tutor: { select: { nombre: true, telefonoEmergencia: true } } } as const;
+
 /** Cuidador con los datos de su usuario que se muestran (`include: { usuario: { select } }`). */
 export type CuidadorConUsuario = Cuidador & {
   usuario: Pick<Usuario, 'nombre' | 'apellido' | 'foto'>;
@@ -131,19 +137,25 @@ export function aMascota(mascota: Mascota): MascotaRespuesta {
 }
 
 /**
- * Datos públicos de una mascota, para quien la identifica por el QR de la chapita.
- * Se arma campo por campo para que nunca se cuele algo más del modelo.
- * @param mascota mascota leída de la base
- * @returns id, nombre, raza, señas, foto y código
+ * Datos públicos de una mascota, para quien la busca por el código del QR.
+ * @param mascota mascota leída con `INCLUIR_TUTOR`
+ * @param conTelefono true si se puede mostrar el teléfono del tutor (la
+ *   mascota está perdida o quien la busca está asignado a ella)
+ * @returns la mascota para responder
  */
-export function aMascotaPublica(mascota: Mascota): MascotaPublicaRespuesta {
+export function aMascotaPublica(mascota: MascotaConTutor, conTelefono: boolean): MascotaPublicaRespuesta {
   return {
     id: mascota.id,
     nombre: mascota.nombre,
     raza: mascota.raza,
+    edad: mascota.edad,
     senas: mascota.senas,
     foto: mascota.foto,
     codigo: mascota.codigo,
+    dueno: {
+      nombre: mascota.tutor.nombre,
+      ...(conTelefono && { telefono: mascota.tutor.telefonoEmergencia }),
+    },
   };
 }
 
@@ -184,9 +196,13 @@ export function aTurno(turno: Turno): TurnoRespuesta {
 /**
  * Reporte con las etiquetas como lista de textos y sin los opcionales vacíos.
  * @param reporte reporte leído con `INCLUIR_ETIQUETAS`
+ * @param contacto quién lo publicó, si se le puede mostrar al usuario
  * @returns el reporte para responder
  */
-export function aReporte(reporte: ReporteConEtiquetas): ReporteRespuesta {
+export function aReporte(
+  reporte: ReporteConEtiquetas,
+  contacto?: ReporteRespuesta['contacto'],
+): ReporteRespuesta {
   return {
     id: reporte.id,
     mascotaId: reporte.mascotaId,
@@ -203,6 +219,7 @@ export function aReporte(reporte: ReporteConEtiquetas): ReporteRespuesta {
     fecha: reporte.fecha.toISOString(),
     ...(reporte.radioMetros !== null && { radioMetros: reporte.radioMetros }),
     ...(reporte.infoAdicional !== null && { infoAdicional: reporte.infoAdicional }),
+    ...(contacto && { contacto }),
   };
 }
 

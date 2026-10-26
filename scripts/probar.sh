@@ -361,7 +361,13 @@ v "fechas sin hora (AAAA-MM-DD)" sí "$(jok 'r.every((x) => /^\d{4}-\d{2}-\d{2}$
 t "turnos de las mascotas asignadas" 200 GET /api/turnos
 v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4)')"
 t "reportes activos" 200 GET /api/reportes
-v "los 3 del seed, con etiquetas como lista" sí "$(jok 'r.length === 3 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "los 4 del seed, con etiquetas como lista" sí "$(jok 'r.length === 4 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "solo el encontrado de Milo trae contacto" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
+v "es el de Valentina, que lo encontró" "Valentina +54 9 11 6274-9031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
+como "$LUCIA"
+t "reportes activos (Lucía, sin Milo asignado)" 200 GET /api/reportes
+v "ninguno trae contacto" sí "$(jok '!r.some((x) => "contacto" in x)')"
+como "$SOFIA"
 t "cuidadores de las mascotas asignadas" 200 GET /api/cuidadores
 v "con nombre armado desde el usuario" sí "$(jok 'r.some((c) => c.nombre === "Sofía Romero")')"
 
@@ -436,10 +442,27 @@ seccion "Mascotas: buscar por código del QR"
 como "$SOFIA"
 t "mascota ajena (Toby, de Lucía)" 200 GET /api/mascotas/codigo/DOGGY-7741-TOBY
 v "es Toby" "4 Toby" "$(jmap 'r.id + " " + r.nombre')"
-v "solo los datos públicos" "codigo,foto,id,nombre,raza,senas" "$(jmap 'Object.keys(r).sort().join()')"
+v "solo los datos públicos" "codigo,dueno,edad,foto,id,nombre,raza,senas" "$(jmap 'Object.keys(r).sort().join()')"
+v "del dueño, solo el nombre (Toby no está perdido)" nombre "$(jmap 'Object.keys(r.dueno).join()')"
+v "nombre de la dueña" Lucía "$(jget .dueno.nombre)"
 t "mascota propia (Luna)" 200 GET /api/mascotas/codigo/DOGGY-8492-LUNA
 v "es Luna" 1 "$(jget .id)"
-v "tampoco trae tutorId" sí "$(jok '!("tutorId" in r) && !("edad" in r)')"
+v "no trae tutorId" sí "$(jok '!("tutorId" in r)')"
+# El teléfono de Sofía lo cambia la sección "Usuario": se compara con el de la base.
+TEL_SOFIA=$(sql "select telefonoEmergencia from Usuario where id = 1;")
+v "asignada: trae el teléfono aunque no esté perdida" "$TEL_SOFIA" "$(jget .dueno.telefono)"
+como "$LUCIA"
+t "Luna sin reporte de perdida (Lucía)" 200 GET /api/mascotas/codigo/DOGGY-8492-LUNA
+v "sin teléfono del dueño" sí "$(jok '!("telefono" in r.dueno)')"
+t "Milo con un encontrado activo (Lucía)" 200 GET /api/mascotas/codigo/DOGGY-5610-MILO
+v "un encontrado no suma el teléfono" sí "$(jok '!("telefono" in r.dueno)')"
+LUNA_PERDIDA=$(reporte_de 1 1 perdido Luna)
+t "Luna perdida (Lucía)" 200 GET /api/mascotas/codigo/DOGGY-8492-LUNA
+v "con el teléfono de la dueña" "$TEL_SOFIA" "$(jget .dueno.telefono)"
+sql "update ReportePerdida set cerradoEn = '$(fecha -u +%Y-%m-%dT%H:%M:%S.000+00:00)' where id = $LUNA_PERDIDA;"
+t "Luna ya apareció (Lucía)" 200 GET /api/mascotas/codigo/DOGGY-8492-LUNA
+v "cerrado el reporte, ya no trae el teléfono" sí "$(jok '!("telefono" in r.dueno)')"
+como "$SOFIA"
 t "en minúsculas y con espacios" 200 GET "/api/mascotas/codigo/%20doggy-7741-toby%20"
 v "lo normaliza" DOGGY-7741-TOBY "$(jget .codigo)"
 t "formato inválido" 400 GET /api/mascotas/codigo/PERRO-12-TOBY
@@ -511,6 +534,7 @@ REP=$(jget .id)
 v "el autor es el de la sesión" 1 "$(jget .autorId)"
 v "etiquetas como lista" "Collar azul,Asustadizo" "$(jget .etiquetas)"
 t "segundo perdido de la misma mascota" 409 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"nombre\":\"Roco\",\"raza\":\"Beagle\",\"descripcion\":\"Collar azul con chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
+v "mensaje del 409" "Esta mascota ya está reportada como perdida. No se puede reportar de nuevo." "$(jget .error)"
 t "perdido de mascota ajena" 403 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":4,\"nombre\":\"Toby\",\"raza\":\"Caniche\",\"descripcion\":\"Pelo blanco con rulos\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
 t "encontrado de mascota ajena (QR)" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":4,\"nombre\":\"Toby\",\"raza\":\"Caniche\",\"descripcion\":\"Pelo blanco con rulos\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 QR_PROPIO=$(jget .id)
@@ -547,6 +571,7 @@ t "perdido de Luna publicado por Carlos: lo edita la dueña" 200 PATCH /api/repo
 v "el autor sigue siendo Carlos" 11 "$(jget .autorId)"
 t "perdido de Luna publicado por Carlos: lo cierra la dueña" 200 PATCH /api/reportes/$R_CARLOS '{"cerrado":true}'
 t "encontrado de Luna (QR) de otra persona: lo cierra la dueña" 200 PATCH /api/reportes/$R_QR '{"cerrado":true}'
+t "encontrado de Milo del seed: Ya la recuperé" 200 PATCH /api/reportes/4 '{"cerrado":true}'
 t "encontrado sin mascota de otro autor: cerrar" 403 PATCH /api/reportes/2 '{"cerrado":true}'
 t "encontrado sin mascota de otro autor: editar" 403 PATCH /api/reportes/2 '{"zona":"Palermo, CABA"}'
 t "perdido de Toby sin tenerlo asignado" 403 PATCH /api/reportes/$R_TOBY '{"zona":"Palermo, CABA"}'

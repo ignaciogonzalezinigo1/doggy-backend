@@ -67,10 +67,10 @@ El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de es
 | Marcos Díaz | `marcos.diaz@mail.com` | Paseador de Roco (invitado) |
 | Vet. San Roque | `contacto@vetsanroque.com` | Clínica asignada a Luna (invitada) |
 | Martín López | `martin.lopez@mail.com` | Autor del reporte de Simba (perdido) |
-| Valentina Pérez | `valentina.perez@mail.com` | Autora del reporte del perro encontrado en Belgrano |
+| Valentina Pérez | `valentina.perez@mail.com` | Autora del reporte del perro encontrado en Belgrano y del de Milo, que encontró escaneando su chapita (Sofía ve "¡Encontraron a Milo!" con su contacto) |
 | Julián Fernández | `julian.fernandez@mail.com` | Autor del reporte de Nieve (perdida) |
 
-Las fechas de los reportes y los turnos se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido y los turnos no quedan viejos; los registros del carnet y la invitación tienen fechas fijas.
+Las fechas de los reportes y los turnos se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido y los turnos no quedan viejos; los registros del carnet tienen fechas fijas.
 
 ### Variables de entorno
 
@@ -94,6 +94,15 @@ No hay claves secretas: el token de sesión es aleatorio y se valida contra la b
 | `npm test` | Prueba todos los endpoints contra una base aparte (`test.db`) y la API en el puerto 3001, sin tocar `dev.db` (ver [Pruebas](#pruebas)) |
 
 `db:reset` sirve para volver a la demo limpia o después de cambiar el schema de forma incompatible. En Prisma 7, `db push` no genera el cliente solo: por eso los scripts encadenan `prisma generate`.
+
+**Si ya tenías una `dev.db` de antes de que los códigos de asignación dejaran de vencer** (se sacó la columna `Invitacion.vence`), después del pull corré:
+
+```bash
+npx prisma db push --accept-data-loss   # borra solo la columna Invitacion.vence; el resto de los datos queda
+npx prisma generate
+```
+
+`npm run db:init` no alcanza: corre `db push` sin `--accept-data-loss` y Prisma se frena porque la columna tiene datos. La otra opción es `npm run db:reset`, que vuelve a la demo limpia (y suma los datos nuevos del seed, como el reporte "encontrado" de Milo).
 
 ### Prisma Studio
 
@@ -136,7 +145,7 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | POST | `/api/fotos` | `multipart/form-data`, archivo en el campo `foto` (JPG, PNG o WEBP, hasta 5 MB) | 201 `{ "foto": "/uploads/<nombre>.jpg" }` · 400 no vino o no es una imagen válida · 401 · 413 más de 5 MB | Sí |
 | GET | `/uploads/<nombre>` | — | 200 la imagen · 404 | No |
 | GET | `/api/mascotas` | — | 200 Mascota[] (las asignadas) · 401 | Sí |
-| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, senas, foto, codigo }` · 400 no es `DOGGY-XXXX-NOMBRE` · 401 · 404 | Sí |
+| GET | `/api/mascotas/codigo/:codigo` | — (acepta minúsculas y espacios alrededor) | 200 `{ id, nombre, raza, edad, senas, foto, codigo, dueno: { nombre, telefono? } }` (`telefono` solo si la mascota tiene un `perdido` activo o el usuario está asignado) · 400 no es `DOGGY-XXXX-NOMBRE` · 401 · 404 | Sí |
 | POST | `/api/mascotas` | `nombre`, `raza`, `edad`, `senas`, `foto` (opcional) | 201 Mascota (con código `DOGGY-XXXX-NOMBRE`; el usuario queda como dueño) · 400 · 401 | Sí |
 | PATCH | `/api/mascotas/:id` | los mismos, opcionales (el código no cambia) | 200 Mascota · 400 · 401 · 403 no asignado · 404 | Sí |
 | GET | `/api/registros` | — | 200 RegistroSanitario[] · 401 | Sí |
@@ -147,7 +156,7 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | POST | `/api/turnos` | `mascotaId`, `categoria`, `fecha` (ISO con hora, a futuro), `motivo`, `lugar` | 201 Turno · 400 · 401 · 403 · 404 | Sí |
 | PATCH | `/api/turnos/:id` | los mismos, opcionales ("a futuro" solo si cambia la fecha) | 200 Turno · 400 · 401 · 403 · 404 | Sí |
 | DELETE | `/api/turnos/:id` | — | 204 · 400 · 401 · 403 · 404 | Sí |
-| GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos, de todos los usuarios) · 401 | Sí |
+| GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos, de todos los usuarios; los `encontrado` de una mascota asignada al usuario que publicó otra persona suman `contacto: { nombre, telefono }`) · 401 | Sí |
 | POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros` (solo perdidos), `infoAdicional` (opcional) | 201 ReportePerdida · 400 · 401 · 403 perdido de una mascota no asignada · 404 · 409 ya tiene uno de pérdida activo | Sí |
 | PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 401 · 403 no es el autor ni está asignado · 404 · 409 ya cerrado | Sí |
 | GET | `/api/cuidadores` | — | 200 Cuidador[] · 401 | Sí |

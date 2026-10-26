@@ -21,7 +21,14 @@ import { DatoInvalido, leerCuerpo, MENSAJE_ID_INVALIDO, parseId, pick } from '..
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
 import { borrarFotoSiHuerfana } from '../lib/fotos';
 import { prisma } from '../lib/prisma';
-import { aInvitacion, aMascota, aMascotaPublica, aRegistro, INCLUIR_MASCOTA_INVITACION } from '../respuestas';
+import {
+  aInvitacion,
+  aMascota,
+  aMascotaPublica,
+  aRegistro,
+  INCLUIR_MASCOTA_INVITACION,
+  INCLUIR_TUTOR,
+} from '../respuestas';
 
 export const mascotasRouter = Router();
 
@@ -53,8 +60,10 @@ mascotasRouter.get('/', async (req, res) => {
  * GET /api/mascotas/codigo/:codigo: busca una mascota por el código del QR de
  * su chapita. La usa quien encontró un perro, que casi nunca está asignado a
  * él, así que no se chequea la asignación pero se responden solo los datos
- * públicos para identificarla (`aMascotaPublica`). Acepta el código en
- * minúsculas o con espacios alrededor.
+ * públicos para identificarla y el nombre del tutor (`aMascotaPublica`). El
+ * teléfono del tutor va solo si la mascota tiene un reporte `perdido` activo
+ * o si quien la busca está asignado a ella: el filtro es acá, no en la app.
+ * Acepta el código en minúsculas o con espacios alrededor.
  * Responde 200 con MascotaPublica, 400 si no tiene el formato
  * DOGGY-XXXX-NOMBRE, 404 si no existe o 500.
  */
@@ -65,12 +74,19 @@ mascotasRouter.get('/codigo/:codigo', async (req, res) => {
     return;
   }
   try {
-    const mascota = await prisma.mascota.findUnique({ where: { codigo } });
+    const mascota = await prisma.mascota.findUnique({ where: { codigo }, include: INCLUIR_TUTOR });
     if (!mascota) {
       responderError(res, 404, MENSAJE_CODIGO_NO_EXISTE);
       return;
     }
-    res.json(aMascotaPublica(mascota));
+    const [rol, perdido] = await Promise.all([
+      rolEn(mascota.id, req.usuarioId),
+      prisma.reportePerdida.findFirst({
+        where: { mascotaId: mascota.id, estado: 'perdido', cerradoEn: null },
+        select: { id: true },
+      }),
+    ]);
+    res.json(aMascotaPublica(mascota, rol !== null || perdido !== null));
   } catch (error) {
     responderErrorInterno(res, error, 'GET /api/mascotas/codigo/:codigo');
   }

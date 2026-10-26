@@ -351,6 +351,22 @@ const reportes = [
     fecha: haceHoras(22),
     radioMetros: 500,
   },
+  // Valentina escaneó la chapita de Milo: Sofía ve "¡Encontraron a Milo!" con el contacto de Valentina.
+  {
+    id: 4,
+    mascotaId: 3,
+    autorId: 3,
+    estado: 'encontrado',
+    nombre: 'Milo',
+    raza: 'Mestizo',
+    descripcion: 'Estaba solo en la plaza, con la chapita puesta. Lo tenemos en casa.',
+    foto: 'milo',
+    etiquetas: [],
+    lat: -34.5614,
+    lng: -58.4565,
+    zona: 'Belgrano, CABA',
+    fecha: haceHoras(1),
+  },
 ];
 
 /** Asignaciones de personas a mascotas. El nombre y la foto salen del usuario. */

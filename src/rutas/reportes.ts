@@ -11,7 +11,12 @@
 
 import { Router } from 'express';
 import { leerCambiosReporte, leerReporteNuevo } from '../cuerpos/reporte';
-import { MENSAJE_MASCOTA_NO_EXISTE, MENSAJE_SIN_PERMISO_MASCOTA, rolEn } from '../lib/asignaciones';
+import {
+  MENSAJE_MASCOTA_NO_EXISTE,
+  MENSAJE_SIN_PERMISO_MASCOTA,
+  mascotasAsignadasA,
+  rolEn,
+} from '../lib/asignaciones';
 import { MENSAJE_ID_INVALIDO, parseId } from '../lib/entrada';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
 import { borrarFotoSiHuerfana } from '../lib/fotos';
@@ -27,7 +32,7 @@ const MENSAJE_REPORTE_NO_EXISTE = 'No encontramos el reporte.';
 const MENSAJE_SIN_PERMISO_REPORTE =
   'Solo quien publicó el reporte o quien tiene la mascota en su cuenta puede modificarlo.';
 const MENSAJE_REPORTE_CERRADO = 'Este reporte ya está cerrado.';
-const MENSAJE_YA_REPORTADA = 'Esta mascota ya tiene un reporte de pérdida activo.';
+const MENSAJE_YA_REPORTADA = 'Esta mascota ya está reportada como perdida. No se puede reportar de nuevo.';
 
 /**
  * Arma la escritura anidada que crea las etiquetas de un reporte nuevo.
@@ -66,16 +71,35 @@ async function puedeGestionar(
 
 /**
  * GET /api/reportes: todos los reportes activos (sin cerrar), de cualquier
- * usuario, con sus etiquetas. Responde 200 con ReportePerdida[] o 500.
+ * usuario, con sus etiquetas. Los `encontrado` de una mascota asignada al
+ * usuario que publicó otra persona traen `contacto` (nombre y teléfono de
+ * quien la encontró), para que la familia le pueda avisar. Responde 200 con
+ * ReportePerdida[] o 500.
  */
-reportesRouter.get('/', async (_req, res) => {
+reportesRouter.get('/', async (req, res) => {
   try {
-    const reportes = await prisma.reportePerdida.findMany({
-      where: ACTIVOS,
-      include: INCLUIR_ETIQUETAS,
-      orderBy: { id: 'asc' },
-    });
-    res.json(reportes.map(aReporte));
+    const [reportes, asignadas] = await Promise.all([
+      prisma.reportePerdida.findMany({
+        where: ACTIVOS,
+        include: { ...INCLUIR_ETIQUETAS, autor: { select: { nombre: true, telefonoEmergencia: true } } },
+        orderBy: { id: 'asc' },
+      }),
+      prisma.mascota.findMany({ where: mascotasAsignadasA(req.usuarioId), select: { id: true } }),
+    ]);
+    const idsAsignadas = new Set(asignadas.map((m) => m.id));
+    res.json(
+      reportes.map(({ autor, ...reporte }) => {
+        const avisarle =
+          reporte.estado === 'encontrado' &&
+          reporte.mascotaId !== null &&
+          idsAsignadas.has(reporte.mascotaId) &&
+          reporte.autorId !== req.usuarioId;
+        return aReporte(
+          reporte,
+          avisarle ? { nombre: autor.nombre, telefono: autor.telefonoEmergencia } : undefined,
+        );
+      }),
+    );
   } catch (error) {
     responderErrorInterno(res, error, 'GET /api/reportes');
   }

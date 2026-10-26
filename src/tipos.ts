@@ -39,10 +39,17 @@ export type MascotaRespuesta = {
 };
 
 /**
- * Lo que ve de una mascota quien escanea su chapita sin estar asignado: lo
- * justo para identificarla. Sin `tutorId`, edad ni nada del dueño o del carnet.
+ * Lo que ve de una mascota quien escanea su chapita: lo justo para
+ * identificarla y el nombre de su tutor. Sin `tutorId`, carnet ni otros datos
+ * del dueño. El teléfono del tutor viene solo si la mascota tiene un reporte
+ * `perdido` activo o si quien la busca está asignado a ella.
  */
-export type MascotaPublicaRespuesta = Pick<MascotaRespuesta, 'id' | 'nombre' | 'raza' | 'senas' | 'foto' | 'codigo'>;
+export type MascotaPublicaRespuesta = Pick<
+  MascotaRespuesta,
+  'id' | 'nombre' | 'raza' | 'edad' | 'senas' | 'foto' | 'codigo'
+> & {
+  dueno: { nombre: string; telefono?: string };
+};
 
 /** Entrada del carnet sanitario. Las fechas van como AAAA-MM-DD. */
 export type RegistroRespuesta = {
@@ -83,6 +90,11 @@ export type ReporteRespuesta = {
   fecha: string;
   radioMetros?: number;
   infoAdicional?: string;
+  /**
+   * Quién encontró a la mascota, para avisarle. Solo en GET /api/reportes, en
+   * los `encontrado` de mascotas asignadas al usuario que publicó otra persona.
+   */
+  contacto?: { nombre: string; telefono: string };
 };
 
 /** Persona asignada a una mascota, con nombre y foto tomados del usuario. */
