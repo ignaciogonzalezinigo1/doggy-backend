@@ -13,11 +13,7 @@
  * hay un formulario que muestre el error debajo del input.
  */
 
-import { aE164 } from './lib/telefonos';
-
-/** Mensaje si el teléfono no es un número real. */
-export const MENSAJE_TELEFONO_INVALIDO =
-  'Teléfono: no es un número válido. Escribilo con la característica, por ejemplo 11 4589-2310 o 299 455-4060.';
+import { interpretarTelefono, MENSAJE_SOLO_ARGENTINA } from './lib/telefonos';
 
 /** Largo máximo de cada campo de texto (el `maxLength` de los inputs de la app). */
 export const LIMITES = {
@@ -25,7 +21,7 @@ export const LIMITES = {
   email: 100,
   password: 64,
   ubicacion: 60,
-  telefono: 20,
+  telefono: 25,
   nombreMascota: 30,
   raza: 40,
   senas: 200,
@@ -256,7 +252,9 @@ export function validarUbicacion(texto: string): string | undefined {
 }
 
 /**
- * Valida un teléfono: entre 8 y 15 dígitos, admitiendo espacios, guiones y "+".
+ * Valida un teléfono con la regla compartida con la app (`interpretarTelefono`
+ * de `lib/telefonos.ts`): solo de la Argentina y un número real, escrito en
+ * cualquier formato habitual (con o sin 0, 15, 9 o +54 adelante).
  * @param telefono texto recibido
  * @returns mensaje de error o undefined
  */
@@ -269,8 +267,10 @@ export function validarTelefono(telefono: string): string | undefined {
   if (!TELEFONO_CARACTERES_REGEX.test(valor)) {
     return conCampo('Teléfono', 'Usá solo números, espacios, guiones, paréntesis y "+".');
   }
-  if (!aE164(valor)) return MENSAJE_TELEFONO_INVALIDO;
-  return undefined;
+  const leido = interpretarTelefono(valor);
+  if (leido.ok) return undefined;
+  // "Solo se aceptan teléfonos de Argentina." va tal cual; el otro error lleva el campo adelante.
+  return leido.error === MENSAJE_SOLO_ARGENTINA ? leido.error : conCampo('Teléfono', leido.error);
 }
 
 // --- Mascotas y reportes ---

@@ -2,18 +2,24 @@
  * Pasa a E.164 los teléfonos que ya están en la base (`npm run db:normalizar-telefonos`).
  *
  * Desde que la API guarda los teléfonos en E.164 (+5491145892310), los que se
- * cargaron antes pueden estar escritos de cualquier forma ("+54 9 11 4589-2310").
- * Este script los convierte con la misma función que usa la API
- * (`aE164`, región AR). No borra nada: si un teléfono está vacío o no se puede
- * interpretar, lo informa y lo deja como está. Muestra el antes y el después
- * de cada uno. Se puede correr más de una vez.
+ * cargaron antes pueden estar escritos de cualquier forma ("+54 9 11 4589-2310",
+ * "0299 15 455-4060"). Este script los convierte con la misma función que usa
+ * la API y la app (`aE164` de `src/lib/telefonos.ts`, celular por defecto). Un
+ * número que ya está en E.164 conserva su tipo: si es un fijo guardado sin el 9
+ * (como el de la clínica), sigue siendo fijo. No borra nada: si un teléfono
+ * está vacío, no se puede interpretar o es de otro país, lo informa y lo deja
+ * como está. Muestra el antes y el después de cada uno. Se puede correr más de
+ * una vez.
  *
  * El único campo de teléfono del schema es `Usuario.telefonoEmergencia`
  * (también lo usan las cuentas de clínicas, como Vet. San Roque).
  */
 
-import { aE164 } from '../src/lib/telefonos';
+import { aE164, esCelular } from '../src/lib/telefonos';
 import { prisma } from '../src/lib/prisma';
+
+/** Un teléfono ya guardado en E.164: "+" y solo dígitos. */
+const E164_REGEX = /^\+\d+$/;
 
 /**
  * Normaliza los teléfonos de todos los usuarios.
@@ -32,10 +38,12 @@ async function normalizar(): Promise<void> {
       console.log(`  ${etiqueta}: (vacío, queda igual)`);
       continue;
     }
-    const despues = aE164(antes);
+    // Un E.164 que no es celular ya se había guardado como fijo: no se le agrega el 9.
+    const fijo = E164_REGEX.test(antes) && !esCelular(antes);
+    const despues = aE164(antes, fijo);
     if (!despues) {
       sinParsear += 1;
-      console.log(`  ${etiqueta}: "${antes}" → no se pudo interpretar, queda igual`);
+      console.log(`  ${etiqueta}: "${antes}" → no es un número argentino válido, queda igual`);
       continue;
     }
     if (despues === antes) {

@@ -252,6 +252,8 @@ t "registro sin teléfono" 400 POST /api/auth/registro '{"nombre":"Ana","apellid
 v "pide el teléfono" "Ingresá un teléfono de contacto." "$(jget .error)"
 t "registro con teléfono inválido" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","telefonoEmergencia":"11 1234","password":"perro1234"}'
 v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
+t "registro con teléfono de otro país" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","telefonoEmergencia":"+1 202 555 0143","password":"perro1234"}'
+v "solo de Argentina" "Solo se aceptan teléfonos de Argentina." "$(jget .error)"
 t "email ya registrado (otras mayúsculas)" 409 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ANA.RUIZ@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
 t "email de una cuenta del seed" 409 POST /api/auth/registro '{"nombre":"Sofía","apellido":"Romero","email":"sofia.romero@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro1234"}'
 t "contraseña de 7 caracteres" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana2@mail.com","telefonoEmergencia":"11 15 4589-2310","password":"perro12"}'
@@ -415,7 +417,16 @@ v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un nú
 t "teléfono con letras" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 4589-23AB"}'
 t "teléfono que no existe (11 1234)" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"11 1234"}'
 # Celular por defecto: el mismo número escrito de cualquier forma se guarda igual, con el 9.
-for formato in "2994554060" "299 455-4060" "0299 15 455-4060" "299 15 4554060" "+54 299 455 4060" "+54 9 299 455-4060" "5492994554060"; do
+t "característica que no existe (351 123-4567)" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"351 123-4567"}'
+v "dice que no es un número válido" sí "$(jok 'r.error.includes("no es un número válido")')"
+# La regla de teléfonos es un solo archivo, copiado igual en la app y en la API.
+COPIA_APP="$RAIZ/../doggy/mobile/src/utils/telefonos.ts"
+if [ -f "$COPIA_APP" ]; then
+  v "telefonos.ts es idéntico en la app y en la API" sí "$(diff -q --strip-trailing-cr src/lib/telefonos.ts "$COPIA_APP" > /dev/null && echo sí || echo no)"
+else
+  echo "Aviso: no está ../doggy, no se compara la copia de telefonos.ts de la app." >&2
+fi
+for formato in "2994554060" "299 455-4060" "0299 15 455-4060" "299 15 4554060" "+54 299 455 4060" "+54 9 299 455-4060" "54 9 299 455-4060" "5492994554060" "0054 9 299 455-4060" "+549 299 4554060"; do
   t "celular \"$formato\"" 200 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
   v "se guarda como celular" +5492994554060 "$(jget .telefonoEmergencia)"
 done
@@ -426,12 +437,23 @@ done
 t "característica de 4 dígitos (2966 421234)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2966 421234"}'
 v "se guarda como celular" +5492966421234 "$(jget .telefonoEmergencia)"
 t "fijo marcado (011) 4777-3020" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020","telefonoFijo":true}'
+t "característica de 3 dígitos (351 423-4567)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"351 423-4567"}'
+v "se guarda como celular" +5493514234567 "$(jget .telefonoEmergencia)"
+t "característica de 4 dígitos (3543 41-2345)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"3543 41-2345"}'
+v "se guarda como celular" +5493543412345 "$(jget .telefonoEmergencia)"
+t "característica 2944 (2944 41-2345)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2944 41-2345"}'
+v "se guarda como celular" +5492944412345 "$(jget .telefonoEmergencia)"
 v "se guarda como fijo, sin el 9" +541147773020 "$(jget .telefonoEmergencia)"
 t "fijo marcado escrito con el 15" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"0299 15 455-4060","telefonoFijo":true}'
 v "se guarda como fijo, sin el 9" +542994554060 "$(jget .telefonoEmergencia)"
 t "telefonoFijo que no es booleano" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"2994554060","telefonoFijo":"sí"}'
-t "número extranjero" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"+34 612 345 678"}'
-v "queda como es" +34612345678 "$(jget .telefonoEmergencia)"
+t "fijo marcado con +54 adelante" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"+54 11 4777-3020","telefonoFijo":true}'
+v "se guarda como fijo, sin el 9" +541147773020 "$(jget .telefonoEmergencia)"
+for formato in "+34 612 345 678" "+1 202 555 0143" "0034 612 345 678"; do
+  t "número de otro país \"$formato\"" 400 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
+  v "solo de Argentina" "Solo se aceptan teléfonos de Argentina." "$(jget .error)"
+done
+v "el teléfono guardado no cambió" +541147773020 "$(sql "select telefonoEmergencia from Usuario where id = 1;")"
 t "body vacío" 400 PATCH /api/usuarios/me '{}'
 t "email de otra cuenta" 409 PATCH /api/usuarios/me '{"email":"lucia.gomez@mail.com"}'
 t "foto con URI del celular" 400 PATCH /api/usuarios/me '{"foto":"file:///var/mobile/perro.jpg"}'

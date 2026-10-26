@@ -11,7 +11,7 @@
 import { CLAVES_FOTO_SEED, esValorDe } from '../dominio';
 import { conCampo, limpiarTexto, parsearSoloFecha, validarTelefono } from '../validaciones';
 import { esRutaUpload, existeUpload } from './fotos';
-import { normalizarTelefono } from './telefonos';
+import { aE164 } from './telefonos';
 
 /** Mensaje cuando el id de la URL no es un entero positivo. */
 export const MENSAJE_ID_INVALIDO = 'El id no es válido.';
@@ -233,7 +233,8 @@ export function leerSoloFecha(valor: unknown, campo: string): Date {
  * @throws DatoInvalido si falta o no es un número válido
  */
 export function leerTelefono(valor: unknown, fijo = false): string {
-  return normalizarTelefono(leerTexto(valor, 'Teléfono', validarTelefono), fijo);
+  const texto = leerTexto(valor, 'Teléfono', validarTelefono);
+  return aE164(texto, fijo) ?? texto;
 }
 
 /**
