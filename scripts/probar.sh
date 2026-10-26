@@ -366,7 +366,7 @@ v "fechas sin hora (AAAA-MM-DD)" sí "$(jok 'r.every((x) => /^\d{4}-\d{2}-\d{2}$
 t "turnos de las mascotas asignadas" 200 GET /api/turnos
 v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4)')"
 t "reportes activos" 200 GET /api/reportes
-v "los 4 del seed, con etiquetas como lista" sí "$(jok 'r.length === 4 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "los 9 del seed, con etiquetas como lista" sí "$(jok 'r.length === 9 && r.every((x) => Array.isArray(x.etiquetas))')"
 v "solo el encontrado de Milo trae contacto" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
 v "es el de Valentina, que lo encontró (en E.164)" "Valentina +5491162749031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
 como "$LUCIA"

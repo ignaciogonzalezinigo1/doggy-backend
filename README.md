@@ -62,17 +62,17 @@ El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de es
 
 | Usuario | Email | Para qué sirve |
 | --- | --- | --- |
-| Sofía Romero | `sofia.romero@mail.com` | La usuaria principal de la demo: tutora de Luna, Roco y Milo |
-| Lucía Gómez | `lucia.gomez@mail.com` | Tutora de Toby; generó el código de asignación `TOBY2026` para Sofía |
-| Carlos Romero | `carlos.romero@mail.com` | Co-tutor (dueño) de Luna |
-| Sol Romero | `sol.romero@mail.com` | Dueña de Milo (hogar secundario) |
-| Marcos Díaz | `marcos.diaz@mail.com` | Paseador de Roco (invitado) |
-| Vet. San Roque | `contacto@vetsanroque.com` | Clínica asignada a Luna (invitada) |
-| Martín López | `martin.lopez@mail.com` | Autor del reporte de Simba (perdido) |
-| Valentina Pérez | `valentina.perez@mail.com` | Autora del reporte del perro encontrado en Belgrano y del de Milo, que encontró escaneando su chapita (Sofía ve "¡Encontraron a Milo!" con su contacto) |
-| Julián Fernández | `julian.fernandez@mail.com` | Autor del reporte de Nieve (perdida) |
+| Sofía Romero | `sofia.romero@mail.com` | La usuaria principal: tutora de Luna (golden), Roco (bulldog francés) y Milo (mestizo). Ve "¡Encontraron a Milo!" con el contacto de Valentina |
+| Lucía Gómez | `lucia.gomez@mail.com` | Tutora de Toby (beagle); generó el código `TOBY2026` para Sofía. Escaneando el QR de Pipa ve el celular de Julián y WhatsApp |
+| Julián Fernández | `julian.fernandez@mail.com` | Tutor de Pipa (border collie), perdida con QR en Caballito |
+| Valentina Pérez | `valentina.perez@mail.com` | Encontró a Milo por el QR y a un mestizo sin collar en Belgrano |
+| Carlos Romero | `carlos.romero@mail.com` | Co-tutor (dueño) de Luna; publicó el labrador encontrado en Villa Urquiza |
+| Sol Romero | `sol.romero@mail.com` | Dueña de Milo (hogar secundario); busca a Nieve en Villa Urquiza |
+| Marcos Díaz | `marcos.diaz@mail.com` | Paseador de Roco (invitado); busca a Rocky en Núñez |
+| Vet. San Roque | `contacto@vetsanroque.com` | Clínica invitada en Luna, con teléfono fijo (sin WhatsApp); publicó el salchicha encontrado |
+| Martín López | `martin.lopez@mail.com` | Busca a Simba, perdido en Palermo |
 
-Las fechas de los reportes y los turnos se calculan desde el momento en que corre el seed, así "hace 2 h" siempre tiene sentido y los turnos no quedan viejos; los registros del carnet tienen fechas fijas.
+Además: 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, y 9 reportes en Palermo, Belgrano, Villa Urquiza, Caballito, Almagro y Núñez. Todos los usuarios, mascotas y reportes tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
 
 ### Variables de entorno
 
@@ -124,9 +124,17 @@ Conservan todas las filas. Con `db push` solo no alcanza: no puede crear `fechaN
 npm run studio
 ```
 
-Abre Prisma Studio en `http://localhost:5555` con la base del `.env`. Se puede cambiar el puerto con `npm run studio -- --port 5556`.
+Abre Prisma Studio con la base del `.env`, en la dirección que muestra la consola ("Prisma Studio is running at …"). Se puede elegir el puerto con `npm run studio -- --port 5556`.
 
-No se usa `npx prisma studio` directo: con Prisma 7.10 responde *"Prisma Studio is not supported for the file:./dev.db protocol"*. Studio sí soporta SQLite, pero la CLI saca el protocolo cortando la URL en `://`, y `file:./dev.db` no lo tiene. Con una ruta absoluta (`file:///…/dev.db`) funciona, pero esa ruta cambia en cada PC y no puede ir en el `.env`. Por eso `npm run studio` corre `scripts/studio.ts`, que arma la URL absoluta a partir de `DATABASE_URL` y se la pasa a `prisma studio --url`. Probado en macOS; en Windows la ruta con `C:\` podría no pasar el mismo parseo.
+No se usa `npx prisma studio` directo: con Prisma 7.10 responde *"Prisma Studio is not supported for the file:./dev.db protocol"*. Studio sí soporta SQLite, pero la CLI saca el protocolo cortando la URL en `://`, y `file:./dev.db` no lo tiene. Con una ruta absoluta (`file:///…/dev.db`) funciona, pero esa ruta cambia en cada PC y no puede ir en el `.env`. Por eso `npm run studio` corre `scripts/studio.ts`, que arma la URL absoluta a partir de `DATABASE_URL` y se la pasa a `prisma studio --url`. Funciona en macOS y en Windows: lanza la CLI de Prisma con el mismo Node (`process.execPath` y el JS de la CLI), en vez de `node_modules/.bin/prisma`, que en Windows es un `prisma.cmd` que `spawn` sin shell no encuentra (ENOENT), y arma la ruta con barras `/` (`file://C:/Users/.../dev.db`), que la CLI resuelve bien.
+
+### Windows
+
+- Instalá con **`npm ci`**, no con `npm install`: respeta el `package-lock.json` sin reescribirlo.
+- Si `npm ci` falla con **EPERM** (no puede borrar un archivo de `node_modules`, por ejemplo `esbuild.exe`), cerrá primero `npm run dev` (o cualquier `tsx watch` que esté corriendo): tiene esos archivos abiertos. Después volvé a correr `npm ci`.
+- Si falla **better-sqlite3** (no encuentra el binario o es de otra versión de Node), corré `npm rebuild better-sqlite3`.
+- **`npm test`** corre en Git Bash: `probar.sh` ya no usa el CLI de `sqlite3` ni el `date` de macOS (consulta la base con `better-sqlite3` y calcula las fechas con Node).
+- **`npm run studio`** funciona igual que en macOS (ver [Prisma Studio](#prisma-studio)).
 
 ### Prisma 7: qué cambia respecto de los ejemplos clásicos
 
