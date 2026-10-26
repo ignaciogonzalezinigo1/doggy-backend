@@ -532,12 +532,17 @@ seccion "Reportes"
 t "perdido de mascota propia" 201 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"nombre\":\"Roco\",\"raza\":\"Beagle\",\"descripcion\":\"Collar azul con chapita\",\"foto\":null,\"etiquetas\":[\"Collar azul\",\"Asustadizo\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500,\"autorId\":99}"
 REP=$(jget .id)
 v "el autor es el de la sesión" 1 "$(jget .autorId)"
+v "nombre, raza y señas salen de la mascota, no del body" "$(sql "select nombre || ' · ' || raza || ' · ' || senas from Mascota where id = 2;")" "$(jmap 'r.nombre + " · " + r.raza + " · " + r.descripcion')"
 v "etiquetas como lista" "Collar azul,Asustadizo" "$(jget .etiquetas)"
 t "segundo perdido de la misma mascota" 409 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"nombre\":\"Roco\",\"raza\":\"Beagle\",\"descripcion\":\"Collar azul con chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
 v "mensaje del 409" "Esta mascota ya está reportada como perdida. No se puede reportar de nuevo." "$(jget .error)"
 t "perdido de mascota ajena" 403 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":4,\"nombre\":\"Toby\",\"raza\":\"Caniche\",\"descripcion\":\"Pelo blanco con rulos\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
-t "encontrado de mascota ajena (QR)" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":4,\"nombre\":\"Toby\",\"raza\":\"Caniche\",\"descripcion\":\"Pelo blanco con rulos\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "encontrado de mascota ajena (QR), que no está perdida" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":4,\"nombre\":\"Firulais\",\"raza\":\"Caniche\",\"descripcion\":\"La vi en la plaza, tiene collar rojo\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 QR_PROPIO=$(jget .id)
+v "nombre y raza de la mascota, no los del body" "Toby · Beagle" "$(jmap 'r.nombre + " · " + r.raza')"
+v "la descripción es el comentario de quien la encontró" "La vi en la plaza, tiene collar rojo" "$(jget .descripcion)"
+t "segundo encontrado de Toby (sin nombre ni raza)" 409 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":4,\"descripcion\":\"Sigue en la plaza\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+v "mensaje del 409" "Ya le avisaron a su familia." "$(jget .error)"
 t "encontrado con mascota que no existe" 404 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":9999,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 t "encontrado con radio" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
 t "etiquetas repetidas" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[\"Collar\",\"collar\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
@@ -576,6 +581,7 @@ t "encontrado sin mascota de otro autor: cerrar" 403 PATCH /api/reportes/2 '{"ce
 t "encontrado sin mascota de otro autor: editar" 403 PATCH /api/reportes/2 '{"zona":"Palermo, CABA"}'
 t "perdido de Toby sin tenerlo asignado" 403 PATCH /api/reportes/$R_TOBY '{"zona":"Palermo, CABA"}'
 t "encontrado propio de mascota ajena: lo edita el autor" 200 PATCH /api/reportes/$QR_PROPIO '{"descripcion":"Pelo blanco con rulos, sin collar"}'
+t "encontrado de mascota registrada: el nombre no se edita" 400 PATCH /api/reportes/$QR_PROPIO '{"nombre":"Firulais"}'
 
 seccion "Invitaciones y cuidadores"
 t "genera código (dueña de Luna)" 201 POST /api/mascotas/1/invitaciones '{"rol":"invitado"}'

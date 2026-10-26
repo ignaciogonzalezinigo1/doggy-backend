@@ -157,7 +157,7 @@ Sin el header, con un token que no existe, vencido (duran 30 días) o cerrado co
 | PATCH | `/api/turnos/:id` | los mismos, opcionales ("a futuro" solo si cambia la fecha) | 200 Turno · 400 · 401 · 403 · 404 | Sí |
 | DELETE | `/api/turnos/:id` | — | 204 · 400 · 401 · 403 · 404 | Sí |
 | GET | `/api/reportes` | — | 200 ReportePerdida[] (solo los activos, de todos los usuarios; los `encontrado` de una mascota asignada al usuario que publicó otra persona suman `contacto: { nombre, telefono }`) · 401 | Sí |
-| POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros` (solo perdidos), `infoAdicional` (opcional) | 201 ReportePerdida · 400 · 401 · 403 perdido de una mascota no asignada · 404 · 409 ya tiene uno de pérdida activo | Sí |
+| POST | `/api/reportes` | `estado`, `mascotaId`, `nombre`, `raza`, `descripcion`, `foto`, `etiquetas`, `lat`, `lng`, `zona`, `fecha`, `radioMetros` (solo perdidos), `infoAdicional` (opcional) | 201 ReportePerdida · 400 · 401 · 403 perdido de una mascota no asignada · 404 · 409 ya tiene uno activo del mismo estado (perdido: "Esta mascota ya está reportada como perdida…"; encontrado: "Ya le avisaron a su familia."). Con `mascotaId`, `nombre` y `raza` se toman de la mascota | Sí |
 | PATCH | `/api/reportes/:id` | contenido opcional (las `etiquetas` se reemplazan todas) o `{ "cerrado": true }` para cerrarlo | 200 ReportePerdida · 400 · 401 · 403 no es el autor ni está asignado · 404 · 409 ya cerrado | Sí |
 | GET | `/api/cuidadores` | — | 200 Cuidador[] · 401 | Sí |
 | DELETE | `/api/mascotas/:id/cuidadores/me` | — | 204 · 400 · 401 · 403 · 404 · 409 único dueño | Sí |

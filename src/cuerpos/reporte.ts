@@ -6,6 +6,10 @@
  * radio de búsqueda es uno de `RADIOS_BUSQUEDA`, solo en reportes de perdidos.
  * En el PATCH no se puede cambiar el estado ni la mascota, y `cerrado: true`
  * cierra el reporte ("Ya apareció").
+ *
+ * Si el reporte es de una mascota registrada (`mascotaId`), el nombre y la
+ * raza no se leen del body: los pone la ruta desde la mascota, así quien la
+ * encontró por el QR no puede cambiar los datos con los que la ve su familia.
  */
 
 import {
@@ -25,6 +29,7 @@ import {
   leerTexto,
   leerTextoOpcional,
   leerTodos,
+  pick,
   type Lectores,
   type Resultado,
 } from '../lib/entrada';
@@ -135,12 +140,36 @@ const LECTORES_NUEVO: Lectores<DatosReporte> = {
     v === undefined || v === null ? null : leerIdDelCuerpo(v, 'La mascota del reporte no es válida.'),
 };
 
+/**
+ * Lectores de un reporte nuevo de una mascota registrada: el nombre y la raza
+ * quedan vacíos y la ruta los completa con los de la mascota.
+ */
+const LECTORES_NUEVO_CON_MASCOTA: Lectores<DatosReporte> = {
+  ...LECTORES_NUEVO,
+  nombre: () => '',
+  raza: () => '',
+};
+
 const LECTORES_CAMBIOS: Lectores<CambiosReporte> = {
   ...LECTORES_CONTENIDO,
   cerrado: (v) => {
     if (v !== true) throw new DatoInvalido('Para cerrar el reporte mandá cerrado: true.');
     return v;
   },
+};
+
+/** Cambios de un reporte de una mascota registrada: todo menos el nombre y la raza. */
+const LECTORES_CAMBIOS_CON_MASCOTA: Lectores<Omit<CambiosReporte, 'nombre' | 'raza'>> = {
+  descripcion: LECTORES_CAMBIOS.descripcion,
+  foto: LECTORES_CAMBIOS.foto,
+  etiquetas: LECTORES_CAMBIOS.etiquetas,
+  lat: LECTORES_CAMBIOS.lat,
+  lng: LECTORES_CAMBIOS.lng,
+  zona: LECTORES_CAMBIOS.zona,
+  fecha: LECTORES_CAMBIOS.fecha,
+  radioMetros: LECTORES_CAMBIOS.radioMetros,
+  infoAdicional: LECTORES_CAMBIOS.infoAdicional,
+  cerrado: LECTORES_CAMBIOS.cerrado,
 };
 
 /** Mensaje si un reporte de mascota encontrada trae radio de búsqueda. */
@@ -153,7 +182,9 @@ const MENSAJE_RADIO_SOLO_PERDIDOS = 'El radio de búsqueda es solo para reportes
  */
 export function leerReporteNuevo(body: unknown): Resultado<DatosReporte> {
   return leerCuerpo(() => {
-    const datos = leerTodos(body, LECTORES_NUEVO);
+    const { mascotaId } = pick(body, ['mascotaId']);
+    const conMascota = mascotaId !== undefined && mascotaId !== null;
+    const datos = leerTodos(body, conMascota ? LECTORES_NUEVO_CON_MASCOTA : LECTORES_NUEVO);
     if (datos.estado === 'perdido' && datos.mascotaId === null) {
       throw new DatoInvalido('Elegí la mascota que se perdió.');
     }
@@ -168,11 +199,19 @@ export function leerReporteNuevo(body: unknown): Resultado<DatosReporte> {
  * Lee los cambios de un reporte.
  * @param body `req.body`
  * @param estado estado guardado del reporte (el radio es solo para perdidos)
+ * @param conMascota true si el reporte es de una mascota registrada (no se
+ *   cambian el nombre ni la raza, que salen de la mascota)
  * @returns los cambios validados o el error del 400
  */
-export function leerCambiosReporte(body: unknown, estado: string): Resultado<CambiosReporte> {
+export function leerCambiosReporte(
+  body: unknown,
+  estado: string,
+  conMascota: boolean,
+): Resultado<CambiosReporte> {
   return leerCuerpo(() => {
-    const cambios = leerPresentes(body, LECTORES_CAMBIOS);
+    const cambios: CambiosReporte = conMascota
+      ? leerPresentes(body, LECTORES_CAMBIOS_CON_MASCOTA)
+      : leerPresentes(body, LECTORES_CAMBIOS);
     if (estado !== 'perdido' && cambios.radioMetros) throw new DatoInvalido(MENSAJE_RADIO_SOLO_PERDIDOS);
     return cambios;
   });

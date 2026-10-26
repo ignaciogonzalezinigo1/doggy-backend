@@ -33,6 +33,7 @@ const MENSAJE_SIN_PERMISO_REPORTE =
   'Solo quien publicó el reporte o quien tiene la mascota en su cuenta puede modificarlo.';
 const MENSAJE_REPORTE_CERRADO = 'Este reporte ya está cerrado.';
 const MENSAJE_YA_REPORTADA = 'Esta mascota ya está reportada como perdida. No se puede reportar de nuevo.';
+const MENSAJE_YA_AVISARON = 'Ya le avisaron a su familia.';
 
 /**
  * Arma la escritura anidada que crea las etiquetas de un reporte nuevo.
@@ -110,12 +111,18 @@ reportesRouter.get('/', async (req, res) => {
  * - perdido: de una mascota asignada al usuario, con radio de búsqueda; una
  *   mascota tiene como mucho un reporte de pérdida activo.
  * - encontrado: la mascota es opcional (la que identificó el QR, que puede
- *   ser de otra persona).
- * Body: estado, mascotaId, nombre, raza, descripcion, foto, etiquetas, lat,
- * lng, zona, fecha (ISO), radioMetros (opcional), infoAdicional (opcional).
+ *   ser de otra persona). Se permite aunque la mascota no esté perdida: puede
+ *   que la familia todavía no sepa que se escapó. Una mascota tiene como
+ *   mucho un encontrado activo.
+ * Si viene `mascotaId`, el nombre y la raza salen de la mascota y no del body.
+ * La foto también, salvo que quien la encontró mande una del momento; en un
+ * perdido, la descripción son las señas de la mascota.
+ * Body: estado, mascotaId, nombre y raza (sin mascota), descripcion, foto,
+ * etiquetas, lat, lng, zona, fecha (ISO), radioMetros (opcional),
+ * infoAdicional (opcional).
  * Responde 201 con el ReportePerdida, 400 si un dato no es válido, 403 si
  * reporta perdida una mascota que no tiene asignada, 404 si la mascota no
- * existe, 409 si ya tiene un reporte de pérdida activo o 500.
+ * existe, 409 si ya tiene un reporte activo del mismo estado o 500.
  */
 reportesRouter.post('/', async (req, res) => {
   try {
@@ -124,27 +131,34 @@ reportesRouter.post('/', async (req, res) => {
       responderError(res, 400, leido.error);
       return;
     }
-    const { etiquetas, ...datos } = leido.datos;
-    if (datos.mascotaId !== null) {
-      const mascota = await prisma.mascota.findUnique({ where: { id: datos.mascotaId } });
+    const { etiquetas, ...leidos } = leido.datos;
+    let datos = leidos;
+    if (leidos.mascotaId !== null) {
+      const mascota = await prisma.mascota.findUnique({ where: { id: leidos.mascotaId } });
       if (!mascota) {
         responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
         return;
       }
-    }
-    if (datos.estado === 'perdido' && datos.mascotaId !== null) {
-      if (!(await rolEn(datos.mascotaId, req.usuarioId))) {
+      if (leidos.estado === 'perdido' && !(await rolEn(mascota.id, req.usuarioId))) {
         responderError(res, 403, MENSAJE_SIN_PERMISO_MASCOTA);
         return;
       }
       const activo = await prisma.reportePerdida.findFirst({
-        where: { ...ACTIVOS, mascotaId: datos.mascotaId, estado: 'perdido' },
+        where: { ...ACTIVOS, mascotaId: mascota.id, estado: leidos.estado },
         select: { id: true },
       });
       if (activo) {
-        responderError(res, 409, MENSAJE_YA_REPORTADA);
+        responderError(res, 409, leidos.estado === 'perdido' ? MENSAJE_YA_REPORTADA : MENSAJE_YA_AVISARON);
         return;
       }
+      const perdido = leidos.estado === 'perdido';
+      datos = {
+        ...leidos,
+        nombre: mascota.nombre,
+        raza: mascota.raza,
+        foto: perdido ? mascota.foto : (leidos.foto ?? mascota.foto),
+        descripcion: perdido ? mascota.senas : leidos.descripcion,
+      };
     }
     const reporte = await prisma.reportePerdida.create({
       data: { ...datos, autorId: req.usuarioId, etiquetas: crearEtiquetas(etiquetas) },
@@ -186,7 +200,7 @@ reportesRouter.patch('/:id', async (req, res) => {
       responderError(res, 409, MENSAJE_REPORTE_CERRADO);
       return;
     }
-    const leido = leerCambiosReporte(req.body, actual.estado);
+    const leido = leerCambiosReporte(req.body, actual.estado, actual.mascotaId !== null);
     if (!leido.ok) {
       responderError(res, 400, leido.error);
       return;
