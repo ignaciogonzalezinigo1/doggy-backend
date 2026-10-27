@@ -1,7 +1,7 @@
 /**
  * Rutas de las mascotas del usuario, y de lo que se crea colgado de una
  * mascota: registros del carnet, códigos de asignación, quién la cuida (irse
- * o sacar a un invitado). También la búsqueda por el código del QR, que es la
+ * o sacar a un invitado) y el borrado de la mascota con todo lo suyo. También la búsqueda por el código del QR, que es la
  * única que deja ver (solo los datos públicos de) una mascota ajena.
  */
 
@@ -367,3 +367,65 @@ mascotasRouter.delete('/:id/cuidadores/:usuarioId', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/mascotas/:id: borra para siempre una mascota y todo lo suyo.
+ * Solo lo puede hacer un dueño. En una transacción, en orden: las etiquetas
+ * de sus reportes, los reportes (activos y cerrados, los publique quien los
+ * publique), el carnet, los turnos, los códigos de asignación, las
+ * asignaciones y la mascota. Las fotos del disco (la de la mascota, las
+ * etiquetas de las vacunas y las de los reportes) se borran recién después
+ * de confirmar la transacción, y solo si ningún otro registro las usa; si
+ * falla borrar un archivo, se loguea y la respuesta sigue siendo 204.
+ * Responde 204 sin body, 400 si el id no es válido, 403 si no es dueño (un
+ * invitado o alguien sin asignar), 404 si no existe o 500.
+ */
+mascotasRouter.delete('/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const mascota = await prisma.mascota.findUnique({ where: { id }, select: { nombre: true } });
+    if (!mascota) {
+      responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+      return;
+    }
+    const resultado = await prisma.$transaction(async (tx) => {
+      const rol = await rolEn(id, req.usuarioId, tx);
+      if (rol !== 'dueno') return { ok: false as const, rol };
+      const deLaMascota = { mascotaId: id };
+      const conMascota = await tx.mascota.findUniqueOrThrow({ where: { id }, select: { foto: true } });
+      const registros = await tx.registroSanitario.findMany({
+        where: deLaMascota,
+        select: { fotoEtiqueta: true },
+      });
+      const reportes = await tx.reportePerdida.findMany({ where: deLaMascota, select: { foto: true } });
+      await tx.etiqueta.deleteMany({ where: { reporte: deLaMascota } });
+      await tx.reportePerdida.deleteMany({ where: deLaMascota });
+      await tx.registroSanitario.deleteMany({ where: deLaMascota });
+      await tx.turno.deleteMany({ where: deLaMascota });
+      await tx.invitacion.deleteMany({ where: deLaMascota });
+      await tx.cuidador.deleteMany({ where: deLaMascota });
+      await tx.mascota.delete({ where: { id } });
+      const fotos = [conMascota.foto, ...registros.map((r) => r.fotoEtiqueta), ...reportes.map((r) => r.foto)];
+      return { ok: true as const, fotos };
+    });
+    if (!resultado.ok) {
+      const mensaje = resultado.rol
+        ? `Solo un dueño de ${mascota.nombre} puede eliminarla.`
+        : MENSAJE_SIN_PERMISO_MASCOTA;
+      responderError(res, 403, mensaje);
+      return;
+    }
+    // Ya está confirmado en la base: `borrarFotoSiHuerfana` no lanza (loguea si falla).
+    await Promise.all([...new Set(resultado.fotos)].map((foto) => borrarFotoSiHuerfana(foto)));
+    res.status(204).end();
+  } catch (error) {
+    if (esErrorPrisma(error, 'P2025')) {
+      responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+    } else {
+      responderErrorInterno(res, error, 'DELETE /api/mascotas/:id');
+    }
+  }
+});

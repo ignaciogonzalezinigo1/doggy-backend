@@ -761,6 +761,48 @@ como "$VET"
 t "una invitada se va con su propio id (Luna)" 204 DELETE /api/mascotas/1/cuidadores/$VET_ID
 v "la veterinaria ya no está asignada a Luna" 0 "$(sql "select count(*) from Cuidador where mascotaId = 1 and usuarioId = $VET_ID;")"
 
+seccion "Borrar mascota"
+# Una mascota de Sofía con todo lo que puede tener: fotos, carnet, turno,
+# reporte con etiquetas, un encontrado de otra persona, un código sin usar y Lucía de invitada.
+como "$SOFIA"
+subir "foto de la mascota a borrar" 201 "$F_JPG"
+FOTO_NUBE=$(jget .foto)
+subir "foto de la etiqueta de su vacuna" 201 "$F_PNG"
+FOTO_NUBE_ETIQUETA=$(jget .foto)
+t "alta de Nube" 201 POST /api/mascotas "{\"nombre\":\"Nube\",\"raza\":\"Mestizo\",\"fechaNacimiento\":\"2022-03-01\",\"senas\":\"Mancha gris en la oreja\",\"foto\":\"$FOTO_NUBE\"}"
+NUBE=$(jget .id)
+t "vacuna de Nube con foto de la etiqueta" 201 POST /api/mascotas/$NUBE/registros "{\"tipo\":\"vacuna\",\"nombre\":\"Antirrábica\",\"fecha\":\"$HOY\",\"profesional\":\"Vet. San Roque\",\"fotoEtiqueta\":\"$FOTO_NUBE_ETIQUETA\"}"
+t "turno de Nube" 201 POST /api/turnos "{\"mascotaId\":$NUBE,\"categoria\":\"veterinario\",\"fecha\":\"$FUT_ISO\",\"motivo\":\"Control\",\"lugar\":\"Vet. San Roque\"}"
+t "Nube se perdió" 201 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":$NUBE,\"descripcion\":\"Mancha gris en la oreja\",\"foto\":null,\"etiquetas\":[\"Collar verde\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
+reporte_de 20 "$NUBE" encontrado Nube > /dev/null
+t "código para Lucía" 201 POST /api/mascotas/$NUBE/invitaciones '{"rol":"invitado"}'
+CODIGO_NUBE=$(jget .token)
+t "código que queda sin usar" 201 POST /api/mascotas/$NUBE/invitaciones '{"rol":"dueno"}'
+como "$LUCIA"
+t "Lucía acepta y queda de invitada" 200 POST /api/invitaciones/$CODIGO_NUBE/aceptar
+t "una invitada no la borra" 403 DELETE /api/mascotas/$NUBE
+v "dice que solo un dueño puede" "Solo un dueño de Nube puede eliminarla." "$(jget .error)"
+como "$CARLOS"
+t "alguien sin asignar no la borra" 403 DELETE /api/mascotas/$NUBE
+como "$SOFIA"
+t "id inválido" 400 DELETE /api/mascotas/abc
+t "no existe" 404 DELETE /api/mascotas/9999
+# Contar todo lo de Nube en una sola consulta: mascota|carnet|turnos|reportes|etiquetas|códigos|asignaciones.
+de_nube() {
+  sql "select (select count(*) from Mascota where id = $NUBE) || '|' || (select count(*) from RegistroSanitario where mascotaId = $NUBE) || '|' || (select count(*) from Turno where mascotaId = $NUBE) || '|' || (select count(*) from ReportePerdida where mascotaId = $NUBE) || '|' || (select count(*) from Etiqueta where reporteId in (select id from ReportePerdida where mascotaId = $NUBE)) || '|' || (select count(*) from Invitacion where mascotaId = $NUBE) || '|' || (select count(*) from Cuidador where mascotaId = $NUBE);"
+}
+v "antes de borrar tiene de todo" "1|1|1|2|1|2|2" "$(de_nube)"
+t "la dueña la borra" 204 DELETE /api/mascotas/$NUBE
+v "no queda nada de Nube en la base" "0|0|0|0|0|0|0" "$(de_nube)"
+v "se borró la foto de la mascota" no "$(hay_archivo "$FOTO_NUBE")"
+v "se borró la foto de la etiqueta" no "$(hay_archivo "$FOTO_NUBE_ETIQUETA")"
+t "borrarla otra vez" 404 DELETE /api/mascotas/$NUBE
+como "$LUCIA"
+t "Lucía ya no la ve" 200 GET /api/mascotas
+v "Nube no está en su lista" sí "$(jok "!r.some((m) => m.id === $NUBE)")"
+t "ni su reporte en el mapa" 200 GET /api/reportes
+v "ningún reporte de Nube" sí "$(jok "!r.some((x) => x.mascotaId === $NUBE)")"
+
 
 # --- Tabla de resultados ---
 
