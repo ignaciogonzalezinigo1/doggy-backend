@@ -95,8 +95,10 @@ export type ReporteRespuesta = {
   radioMetros?: number;
   infoAdicional?: string;
   /**
-   * Quién encontró a la mascota, para avisarle. Solo en GET /api/reportes, en
-   * los `encontrado` de mascotas asignadas al usuario que publicó otra persona.
+   * A quién avisarle. Solo en GET /api/reportes: en los `encontrado` de
+   * mascotas asignadas al usuario que publicó otra persona, quién la encontró;
+   * en los `perdido` que publicó otra persona de mascotas no asignadas al
+   * usuario, la familia que la busca.
    */
   contacto?: { nombre: string; telefono: string };
   /** Cuándo se cerró. Solo en un reporte cerrado (la respuesta del PATCH que lo cierra). */

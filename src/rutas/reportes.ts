@@ -123,8 +123,11 @@ async function cierreDe(
  * GET /api/reportes: todos los reportes activos (sin cerrar), de cualquier
  * usuario, con sus etiquetas. Los `encontrado` de una mascota asignada al
  * usuario que publicó otra persona traen `contacto` (nombre y teléfono de
- * quien la encontró), para que la familia le pueda avisar. Responde 200 con
- * ReportePerdida[] o 500.
+ * quien la encontró), para que la familia le pueda avisar. Los `perdido`
+ * traen `contacto` de quien los publicó (la familia) para quien no está
+ * asignado a la mascota, así le puede escribir quien la vio: es la misma
+ * regla que el teléfono del QR (público mientras la mascota está perdida).
+ * Responde 200 con ReportePerdida[] o 500.
  */
 reportesRouter.get('/', async (req, res) => {
   try {
@@ -139,11 +142,12 @@ reportesRouter.get('/', async (req, res) => {
     const idsAsignadas = new Set(asignadas.map((m) => m.id));
     res.json(
       reportes.map(({ autor, ...reporte }) => {
+        const deOtro = reporte.autorId !== req.usuarioId;
+        const asignada = reporte.mascotaId !== null && idsAsignadas.has(reporte.mascotaId);
+        // A la familia: quién la encontró. A los demás: la familia que la busca.
         const avisarle =
-          reporte.estado === 'encontrado' &&
-          reporte.mascotaId !== null &&
-          idsAsignadas.has(reporte.mascotaId) &&
-          reporte.autorId !== req.usuarioId;
+          deOtro && autor.telefonoEmergencia !== '' &&
+          ((reporte.estado === 'encontrado' && asignada) || (reporte.estado === 'perdido' && !asignada));
         return aReporte(
           reporte,
           avisarle ? { nombre: autor.nombre, telefono: autor.telefonoEmergencia } : undefined,

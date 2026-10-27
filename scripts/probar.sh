@@ -374,11 +374,13 @@ v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4
 t "reportes activos" 200 GET /api/reportes
 v "los 10 del seed, con etiquetas como lista" sí "$(jok 'r.length === 10 && r.every((x) => Array.isArray(x.etiquetas))')"
 v "Rocky: el perdido y el encontrado de Martín, los dos activos" "perdido,encontrado" "$(jmap 'r.filter((x) => x.mascotaId === 6).map((x) => x.estado).join()')"
-v "solo el encontrado de Milo trae contacto" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
+v "traen contacto el encontrado de Milo y los perdidos de otros" 1,3,4,5,7 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
 v "es el de Valentina, que lo encontró (en E.164)" "Valentina +5491162749031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
+v "el de Pipa es de Julián, que la busca" Julián "$(jmap 'r.find((x) => x.id === 5).contacto.nombre')"
+v "ningún encontrado de otra familia trae contacto" sí "$(jok '!r.some((x) => x.estado === "encontrado" && x.id !== 4 && "contacto" in x)')"
 como "$LUCIA"
 t "reportes activos (Lucía, sin Milo asignado)" 200 GET /api/reportes
-v "ninguno trae contacto" sí "$(jok '!r.some((x) => "contacto" in x)')"
+v "solo los perdidos de otros traen contacto" 1,3,5,7 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
 como "$SOFIA"
 t "cuidadores de las mascotas asignadas" 200 GET /api/cuidadores
 v "con nombre armado desde el usuario" sí "$(jok 'r.some((c) => c.nombre === "Sofía Romero")')"
@@ -802,7 +804,6 @@ t "Lucía ya no la ve" 200 GET /api/mascotas
 v "Nube no está en su lista" sí "$(jok "!r.some((m) => m.id === $NUBE)")"
 t "ni su reporte en el mapa" 200 GET /api/reportes
 v "ningún reporte de Nube" sí "$(jok "!r.some((x) => x.mascotaId === $NUBE)")"
-
 
 # --- Tabla de resultados ---
 
