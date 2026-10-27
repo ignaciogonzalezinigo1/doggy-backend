@@ -733,6 +733,35 @@ t "id inválido" 400 DELETE /api/mascotas/abc/cuidadores/me
 t "Luna tiene otro dueño: se puede ir" 204 DELETE /api/mascotas/1/cuidadores/me
 t "body no JSON objeto" 400 PATCH /api/mascotas/3 '[1,2]'
 
+seccion "Quitar invitados"
+# Roco (2): Sofía dueña, Marcos invitado. Milo (3): Sofía y Sol dueñas. Luna (1): la veterinaria, invitada.
+id_de() { sql "select id from Usuario where email = '$1';"; }
+MARCOS_ID=$(id_de marcos.diaz@mail.com); SOL_ID=$(id_de sol.romero@mail.com); VET_ID=$(id_de contacto@vetsanroque.com)
+MARCOS=$(login marcos.diaz@mail.com) || abortar "no se pudo hacer login con Marcos."
+VET=$(login contacto@vetsanroque.com) || abortar "no se pudo hacer login con la veterinaria."
+como "$MARCOS"
+t "un invitado no quita a la dueña" 403 DELETE /api/mascotas/2/cuidadores/1
+v "dice que solo un dueño puede" "Solo un dueño de Roco puede quitar a otras personas." "$(jget .error)"
+como "$LUCIA"
+t "alguien sin asignar no quita a nadie" 403 DELETE /api/mascotas/2/cuidadores/$MARCOS_ID
+como "$SOFIA"
+t "quitar a quien no está asignado (Lucía)" 404 DELETE /api/mascotas/2/cuidadores/20
+v "dice que no está asignada" "Esa persona no está asignada a Roco." "$(jget .error)"
+t "id de usuario inválido" 400 DELETE /api/mascotas/2/cuidadores/abc
+t "mascota no existe" 404 DELETE /api/mascotas/9999/cuidadores/$MARCOS_ID
+t "una dueña no quita a otra dueña (Sol, de Milo)" 403 DELETE /api/mascotas/3/cuidadores/$SOL_ID
+t "única dueña, con su propio id" 409 DELETE /api/mascotas/2/cuidadores/1
+t "la dueña quita a Marcos (invitado de Roco)" 204 DELETE /api/mascotas/2/cuidadores/$MARCOS_ID
+v "Marcos ya no está asignado" 0 "$(sql "select count(*) from Cuidador where mascotaId = 2 and usuarioId = $MARCOS_ID;")"
+t "quitarlo otra vez" 404 DELETE /api/mascotas/2/cuidadores/$MARCOS_ID
+como "$MARCOS"
+t "Marcos ya no ve a Roco" 200 GET /api/mascotas
+v "Roco no está en su lista" sí "$(jok '!r.some((m) => m.id === 2)')"
+como "$VET"
+t "una invitada se va con su propio id (Luna)" 204 DELETE /api/mascotas/1/cuidadores/$VET_ID
+v "la veterinaria ya no está asignada a Luna" 0 "$(sql "select count(*) from Cuidador where mascotaId = 1 and usuarioId = $VET_ID;")"
+
+
 # --- Tabla de resultados ---
 
 node - "$FILAS" <<'JS'

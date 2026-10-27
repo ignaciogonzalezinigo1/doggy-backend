@@ -1,11 +1,11 @@
 /**
  * Rutas de las mascotas del usuario, y de lo que se crea colgado de una
- * mascota: registros del carnet, códigos de asignación y la desasignación
- * del propio usuario. También la búsqueda por el código del QR, que es la
+ * mascota: registros del carnet, códigos de asignación, quién la cuida (irse
+ * o sacar a un invitado). También la búsqueda por el código del QR, que es la
  * única que deja ver (solo los datos públicos de) una mascota ajena.
  */
 
-import { Router } from 'express';
+import { type Response, Router } from 'express';
 import { leerCambiosMascota, leerMascotaNueva } from '../cuerpos/mascota';
 import { leerRegistroNuevo } from '../cuerpos/registro';
 import { esValorDe, ROLES_MASCOTA } from '../dominio';
@@ -37,6 +37,7 @@ const ASIGNACION_CREADOR = { rol: 'dueno', detalle: 'Tutor/a', tipo: 'familia' }
 
 const MENSAJE_NO_ASIGNADO = 'No estás asignado a esta mascota.';
 const MENSAJE_UNICO_DUENO = 'Sos el único dueño. Asigná a otra persona como dueña antes de irte.';
+const MENSAJE_NO_QUITA_DUENO = 'No podés quitar a otro dueño.';
 const MENSAJE_CODIGO_INVALIDO = 'Ese código no es de una chapita Doggy (DOGGY-XXXX-NOMBRE).';
 const MENSAJE_CODIGO_NO_EXISTE = 'No hay ninguna mascota registrada con ese código.';
 
@@ -242,6 +243,77 @@ mascotasRouter.post('/:id/invitaciones', async (req, res) => {
   }
 });
 
+/** Cómo terminó un pedido para sacar a alguien de una mascota. */
+type ResultadoQuitar =
+  | 'quitado'
+  | 'no-asignado'
+  | 'unico-dueno'
+  | 'no-es-dueno'
+  | 'objetivo-no-asignado'
+  | 'objetivo-dueno';
+
+/**
+ * Saca a una persona de una mascota, con el chequeo y el borrado en una
+ * transacción. Si se saca a sí mismo, vale la regla de siempre: el último
+ * dueño no se puede ir. Si saca a otro, tiene que ser dueño y el otro, un
+ * invitado: un dueño no saca a otro dueño.
+ * @param mascotaId mascota (ya se sabe que existe)
+ * @param usuarioId usuario de la sesión
+ * @param objetivoId usuario a sacar (el mismo de la sesión para irse)
+ * @returns el resultado, para elegir el status
+ */
+async function quitarCuidador(
+  mascotaId: number,
+  usuarioId: number,
+  objetivoId: number,
+): Promise<ResultadoQuitar> {
+  return prisma.$transaction(async (tx) => {
+    const rol = await rolEn(mascotaId, usuarioId, tx);
+    if (!rol) return 'no-asignado';
+    if (objetivoId === usuarioId) {
+      if (rol === 'dueno') {
+        const duenos = await tx.cuidador.count({ where: { mascotaId, rol: 'dueno' } });
+        if (duenos === 1) return 'unico-dueno';
+      }
+    } else {
+      if (rol !== 'dueno') return 'no-es-dueno';
+      const rolObjetivo = await rolEn(mascotaId, objetivoId, tx);
+      if (!rolObjetivo) return 'objetivo-no-asignado';
+      if (rolObjetivo === 'dueno') return 'objetivo-dueno';
+    }
+    await tx.cuidador.delete({ where: { mascotaId_usuarioId: { mascotaId, usuarioId: objetivoId } } });
+    return 'quitado';
+  });
+}
+
+/**
+ * Responde según cómo terminó `quitarCuidador`.
+ * @param res respuesta de Express
+ * @param resultado lo que devolvió `quitarCuidador`
+ * @param nombre nombre de la mascota, para los mensajes
+ */
+function responderQuitar(res: Response, resultado: ResultadoQuitar, nombre: string) {
+  switch (resultado) {
+    case 'quitado':
+      res.status(204).end();
+      return;
+    case 'no-asignado':
+      responderError(res, 403, MENSAJE_NO_ASIGNADO);
+      return;
+    case 'unico-dueno':
+      responderError(res, 409, MENSAJE_UNICO_DUENO);
+      return;
+    case 'no-es-dueno':
+      responderError(res, 403, `Solo un dueño de ${nombre} puede quitar a otras personas.`);
+      return;
+    case 'objetivo-dueno':
+      responderError(res, 403, MENSAJE_NO_QUITA_DUENO);
+      return;
+    case 'objetivo-no-asignado':
+      responderError(res, 404, `Esa persona no está asignada a ${nombre}.`);
+  }
+}
+
 /**
  * DELETE /api/mascotas/:id/cuidadores/me: desasigna al usuario de la mascota.
  * El último dueño no se puede ir: la mascota no puede quedar sin nadie que la
@@ -256,31 +328,42 @@ mascotasRouter.delete('/:id/cuidadores/me', async (req, res) => {
     return;
   }
   try {
-    const mascota = await prisma.mascota.findUnique({ where: { id: mascotaId }, select: { id: true } });
+    const mascota = await prisma.mascota.findUnique({ where: { id: mascotaId }, select: { nombre: true } });
     if (!mascota) {
       responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
       return;
     }
-    const resultado = await prisma.$transaction(async (tx) => {
-      const rol = await rolEn(mascotaId, req.usuarioId, tx);
-      if (!rol) return 'no-asignado';
-      if (rol === 'dueno') {
-        const duenos = await tx.cuidador.count({ where: { mascotaId, rol: 'dueno' } });
-        if (duenos === 1) return 'unico-dueno';
-      }
-      await tx.cuidador.delete({
-        where: { mascotaId_usuarioId: { mascotaId, usuarioId: req.usuarioId } },
-      });
-      return 'desasignado';
-    });
-    if (resultado === 'no-asignado') {
-      responderError(res, 403, MENSAJE_NO_ASIGNADO);
-    } else if (resultado === 'unico-dueno') {
-      responderError(res, 409, MENSAJE_UNICO_DUENO);
-    } else {
-      res.status(204).end();
-    }
+    responderQuitar(res, await quitarCuidador(mascotaId, req.usuarioId, req.usuarioId), mascota.nombre);
   } catch (error) {
     responderErrorInterno(res, error, 'DELETE /api/mascotas/:id/cuidadores/me');
   }
 });
+
+/**
+ * DELETE /api/mascotas/:id/cuidadores/:usuarioId: saca a una persona de la
+ * mascota. Un dueño puede sacar a un invitado (no a otro dueño); cualquiera
+ * se puede sacar a sí mismo con su propio id, con la misma regla que `/me`.
+ * Responde 204 sin body, 400 si un id no es válido, 403 si el usuario no está
+ * asignado, no es dueño o quiere sacar a otro dueño, 404 si la mascota no
+ * existe o esa persona no está asignada, 409 si es el único dueño y quiere
+ * irse, o 500.
+ */
+mascotasRouter.delete('/:id/cuidadores/:usuarioId', async (req, res) => {
+  const mascotaId = parseId(req.params.id);
+  const objetivoId = parseId(req.params.usuarioId);
+  if (mascotaId === null || objetivoId === null) {
+    responderError(res, 400, MENSAJE_ID_INVALIDO);
+    return;
+  }
+  try {
+    const mascota = await prisma.mascota.findUnique({ where: { id: mascotaId }, select: { nombre: true } });
+    if (!mascota) {
+      responderError(res, 404, MENSAJE_MASCOTA_NO_EXISTE);
+      return;
+    }
+    responderQuitar(res, await quitarCuidador(mascotaId, req.usuarioId, objetivoId), mascota.nombre);
+  } catch (error) {
+    responderErrorInterno(res, error, 'DELETE /api/mascotas/:id/cuidadores/:usuarioId');
+  }
+});
+
