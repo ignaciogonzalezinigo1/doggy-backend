@@ -1,12 +1,24 @@
 /**
- * Datos de ejemplo para la base local: la demo de la app.
+ * Datos de ejemplo para la base local: la demo mínima para presentar la app.
  *
  * Corre con `npm run db:seed` (y al final de `npm run db:reset`). Borra todo
  * antes de cargar, así se puede correr más de una vez. Al terminar imprime un
  * resumen con cada usuario de la demo y qué conviene mostrar con él.
  *
- * - Usuarios con direcciones de CABA y teléfonos en E.164: los celulares con
- *   el 9; la clínica, fijo (así se ve que no ofrece WhatsApp).
+ * Son tres usuarios, los justos para recorrer toda la app:
+ * - Sofía (1), la usuaria principal: dueña de Luna, Roco y Milo, con carnet,
+ *   turnos y fotos. Es la dueña en el flujo de perdidos.
+ * - Lucía (20): dueña de Toby. Generó el código TOBY2026 para que Sofía lo
+ *   acepte como invitada (roles dueño e invitado). En la demo en vivo escanea
+ *   el QR de Luna.
+ * - Julián (4), un vecino: dueño de Pipa, perdida (así el mapa no arranca
+ *   vacío), paseador de Roco (invitado: Familia y Cuidadores con otra persona
+ *   y "Quitar") y ya escaneó el QR de Milo sin que estuviera perdido (Sofía ve
+ *   "¿Se perdió Milo?").
+ *
+ * - Teléfonos en E.164, celulares. El de Sofía sale de `TELEFONO_DEMO_SOFIA`
+ *   del `.env` (5491…, sin + ni espacios), para mostrar WhatsApp con un número
+ *   real sin escribirlo en el repo; si está vacía, va uno inventado.
  * - Las fotos son claves de imágenes que vienen en la app
  *   (doggy/mobile/assets/images, ver `FOTOS_LOCALES` en src/data/fotos.ts y
  *   los créditos en doggy/CREDITOS.md).
@@ -14,18 +26,14 @@
  *   dicen "hace 2 h", la Agenda tiene turnos pasados y próximos, y el carnet
  *   tiene refuerzos próximos y vencidos. Las fechas de nacimiento son fijas.
  *
- * Las pruebas (`npm test`) parten de estos datos: Sofía (1) tiene a Luna,
- * Roco y Milo (1 a 3), Lucía (20) a Toby (4), Roco tiene una sola dueña, y
- * ninguna de esas cuatro mascotas está reportada como perdida. Rocky (6), de
- * Marcos, está perdido y con un encontrado de Martín todavía sin recuperar
- * (reencuentro), y Milo tiene un encontrado de Valentina por QR sin estar
- * perdido (caso dudoso). Simba (7, de Martín), Nieve (8, de Sol) y Pipa (5)
- * están perdidos sin encontrar. No hay encontrados anónimos: todo encontrado
- * se publica escaneando la chapita.
+ * Las pruebas (`npm test`) parten de estos datos y suman por su cuenta los
+ * actores que necesitan (co-dueños, invitados, una clínica con fijo y otro
+ * reencuentro): ver "Actores extra" en scripts/probar.sh.
  */
 
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
+import { interpretarTelefono } from '../src/lib/telefonos';
 
 /** Contraseña de todos los usuarios de prueba. */
 const PASSWORD_DEMO = 'doggy1234';
@@ -36,21 +44,30 @@ const HORA_MS = 60 * 60 * 1000;
 /** Diferencia de Argentina con UTC (no tiene horario de verano). */
 const DESFASE_ARGENTINA_MS = -3 * HORA_MS;
 
-/** Usuaria principal de la demo: tutora de Luna, Roco y Milo. */
+/** Usuaria principal de la demo: dueña de Luna, Roco y Milo. */
 const SOFIA_ID = 1;
-const MARTIN_ID = 2;
-/** Encontró a Milo escaneando su chapita. */
-const VALENTINA_ID = 3;
-/** Tutor de Pipa, perdida sin encontrar (para escanear su QR con otra cuenta). */
+/** Vecino: dueño de Pipa (perdida), paseador de Roco y encontró a Milo. */
 const JULIAN_ID = 4;
-const CARLOS_ID = 11;
-/** La clínica: teléfono fijo, sin WhatsApp. */
-const VETERINARIA_ID = 12;
-/** Tutor de Rocky: perdido en Núñez y encontrado por Martín, todavía sin recuperar. */
-const MARCOS_ID = 13;
-const SOL_ID = 14;
-/** Tutora de Toby: generó el código de asignación TOBY2026 para Sofía. */
+/** Dueña de Toby: generó el código de asignación TOBY2026 para Sofía. */
 const LUCIA_ID = 20;
+
+/** Celular inventado de Sofía, si `TELEFONO_DEMO_SOFIA` está vacía. */
+const TELEFONO_SOFIA_INVENTADO = '+5491160685371';
+
+/**
+ * Teléfono de Sofía: el de `TELEFONO_DEMO_SOFIA` del `.env` (5491…, sin + ni
+ * espacios) o, si está vacía, uno inventado. Así la demo puede abrir WhatsApp
+ * a un celular real sin que el número quede escrito en el repo.
+ * @returns el teléfono en E.164
+ * @throws si la variable tiene algo que no es un celular argentino válido
+ */
+function telefonoSofia(): string {
+  const valor = process.env.TELEFONO_DEMO_SOFIA?.trim() ?? '';
+  if (valor === '') return TELEFONO_SOFIA_INVENTADO;
+  const lectura = interpretarTelefono(valor);
+  if (!lectura.ok) throw new Error(`TELEFONO_DEMO_SOFIA no es válido: ${lectura.error}`);
+  return lectura.e164;
+}
 
 /**
  * Fecha de hace una cantidad de horas (para que los reportes digan "hace 2 h").
@@ -114,25 +131,7 @@ const usuarios = [
     email: 'sofia.romero@mail.com',
     ubicacion: 'Gurruchaga 1450, Palermo',
     foto: 'sofia',
-    telefonoEmergencia: '+5491145892310',
-  },
-  {
-    id: MARTIN_ID,
-    nombre: 'Martín',
-    apellido: 'López',
-    email: 'martin.lopez@mail.com',
-    ubicacion: 'Charcas 4120, Palermo',
-    foto: 'martin',
-    telefonoEmergencia: '+5491153201187',
-  },
-  {
-    id: VALENTINA_ID,
-    nombre: 'Valentina',
-    apellido: 'Pérez',
-    email: 'valentina.perez@mail.com',
-    ubicacion: 'Juramento 2380, Belgrano',
-    foto: 'valentina',
-    telefonoEmergencia: '+5491162749031',
+    telefonoEmergencia: telefonoSofia(),
   },
   {
     id: JULIAN_ID,
@@ -141,45 +140,7 @@ const usuarios = [
     email: 'julian.fernandez@mail.com',
     ubicacion: 'Díaz Vélez 4300, Almagro',
     foto: 'julian',
-    telefonoEmergencia: '+5491148126650',
-  },
-  {
-    id: CARLOS_ID,
-    nombre: 'Carlos',
-    apellido: 'Romero',
-    email: 'carlos.romero@mail.com',
-    ubicacion: 'Gurruchaga 1450, Palermo',
-    foto: 'carlos',
-    telefonoEmergencia: '+5491145897712',
-  },
-  {
-    // Cuenta de una clínica: el nombre completo va en `nombre` para que el
-    // cuidador se muestre como "Vet. San Roque". Teléfono fijo: sin WhatsApp.
-    id: VETERINARIA_ID,
-    nombre: 'Vet. San Roque',
-    apellido: '',
-    email: 'contacto@vetsanroque.com',
-    ubicacion: 'Av. Scalabrini Ortiz 1830, Palermo',
-    foto: 'vet-san-roque',
-    telefonoEmergencia: '+541147773020',
-  },
-  {
-    id: MARCOS_ID,
-    nombre: 'Marcos',
-    apellido: 'Díaz',
-    email: 'marcos.diaz@mail.com',
-    ubicacion: 'Cuba 3150, Núñez',
-    foto: 'marcos',
-    telefonoEmergencia: '+5491134567821',
-  },
-  {
-    id: SOL_ID,
-    nombre: 'Sol',
-    apellido: 'Romero',
-    email: 'sol.romero@mail.com',
-    ubicacion: 'Virrey Loreto 3010, Colegiales',
-    foto: 'sol',
-    telefonoEmergencia: '+5491145890045',
+    telefonoEmergencia: '+5491157698999',
   },
   {
     id: LUCIA_ID,
@@ -188,7 +149,7 @@ const usuarios = [
     email: 'lucia.gomez@mail.com',
     ubicacion: 'Rojas 120, Caballito',
     foto: 'lucia',
-    telefonoEmergencia: '+5491150983364',
+    telefonoEmergencia: '+5491163229096',
   },
 ];
 
@@ -235,7 +196,7 @@ const mascotas = [
     senas: 'Tricolor, con la punta de la cola blanca.',
     foto: 'toby',
   },
-  // Perdida sin encontrar: para probar el QR con otra cuenta.
+  // De Julián, perdida sin encontrar: así el mapa no arranca vacío.
   {
     id: 5,
     tutorId: JULIAN_ID,
@@ -246,45 +207,13 @@ const mascotas = [
     senas: 'Negra y blanca, con la cara partida en dos colores. Collar azul con chapita.',
     foto: 'pipa',
   },
-  // Perdido y encontrado: en el mapa es un solo pin verde de "¡Reencuentro!".
-  {
-    id: 6,
-    tutorId: MARCOS_ID,
-    nombre: 'Rocky',
-    raza: 'Boxer',
-    fechaNacimiento: dia('2019-11-12'),
-    codigo: 'DOGGY-1953-ROCKY',
-    senas: 'Boxer atigrado con el pecho blanco. Collar de cuero marrón.',
-    foto: 'rocky',
-  },
-  // Perdido sin encontrar, en Palermo.
-  {
-    id: 7,
-    tutorId: MARTIN_ID,
-    nombre: 'Simba',
-    raza: 'Golden Retriever',
-    fechaNacimiento: dia('2024-02-10'),
-    codigo: 'DOGGY-6237-SIMBA',
-    senas: 'Golden de pelo claro, muy amigable. Collar azul con chapita.',
-    foto: 'simba',
-  },
-  // Perdida sin encontrar, en Villa Urquiza.
-  {
-    id: 8,
-    tutorId: SOL_ID,
-    nombre: 'Nieve',
-    raza: 'Spitz',
-    fechaNacimiento: dia('2022-07-30'),
-    codigo: 'DOGGY-4815-NIEVE',
-    senas: 'Blanca de pelo largo, chiquita. Se asusta con los ruidos fuertes.',
-    foto: 'nieve',
-  },
 ];
 
 /**
  * Carnet sanitario. Luna tiene de todo (refuerzos próximos y vencidos, un
- * análisis); Roco, una sola vacuna (la card de próximo refuerzo, que también
- * se desliza para borrar); Milo, la castración y un refuerzo vencido.
+ * análisis); Roco, una vacuna y una consulta (la card de próximo refuerzo,
+ * que también se desliza para borrar); Milo, la castración y refuerzos
+ * vencidos. Toby y Pipa tienen una vacuna cada uno (los ve su familia).
  */
 const registros = [
   // Luna
@@ -317,66 +246,16 @@ const turnos = [
 ];
 
 /**
- * Reportes con sus etiquetas, repartidos por barrios. Todos son de mascotas
- * registradas, con los datos de la mascota (nombre, raza, foto y señas): los
- * perdidos los publica su familia y los encontrados, quien escaneó la chapita
- * (con su comentario en `infoAdicional`).
+ * Reportes con sus etiquetas: el perdido de Pipa (el mapa no arranca vacío)
+ * y el encontrado de Milo (el caso "¿Se perdió…?"). Llevan los datos de la
+ * mascota (nombre, raza, foto y señas); el encontrado lo publicó quien
+ * escaneó la chapita, con su comentario en `infoAdicional`. El reencuentro se
+ * muestra en vivo: Sofía reporta a Luna y Lucía escanea su QR.
  */
 const reportes = [
+  // Perdida en Parque Centenario hace 5 horas: el pin mostaza del mapa.
   {
     id: 1,
-    mascotaId: 7,
-    autorId: MARTIN_ID,
-    estado: 'perdido',
-    nombre: 'Simba',
-    raza: 'Golden Retriever',
-    descripcion: 'Golden de pelo claro, muy amigable. Collar azul con chapita.',
-    foto: 'simba',
-    etiquetas: ['Collar azul'],
-    lat: -34.5887,
-    lng: -58.4286,
-    zona: 'Palermo, CABA',
-    fecha: haceHoras(2),
-    radioMetros: 1000,
-    infoAdicional: 'Se escapó cerca de Plaza Armenia. Tenía puesto un pretal rojo. Se asusta con las motos.',
-  },
-  {
-    id: 3,
-    mascotaId: 8,
-    autorId: SOL_ID,
-    estado: 'perdido',
-    nombre: 'Nieve',
-    raza: 'Spitz',
-    descripcion: 'Blanca de pelo largo, chiquita. Se asusta con los ruidos fuertes.',
-    foto: 'nieve',
-    etiquetas: ['Asustadiza', 'Pelo largo'],
-    lat: -34.5786,
-    lng: -58.4887,
-    zona: 'Villa Urquiza, CABA',
-    fecha: haceHoras(22),
-    radioMetros: 500,
-    infoAdicional: 'Se asustó con la pirotecnia y salió corriendo.',
-  },
-  // Valentina escaneó la chapita de Milo, que no estaba perdido: Sofía ve "¿Se perdió Milo?" con el contacto de Valentina.
-  {
-    id: 4,
-    mascotaId: 3,
-    autorId: VALENTINA_ID,
-    estado: 'encontrado',
-    nombre: 'Milo',
-    raza: 'Mestizo',
-    descripcion: 'Marrón con el pecho y las patas blancas. Orejas caídas.',
-    foto: 'milo',
-    etiquetas: [],
-    lat: -34.5614,
-    lng: -58.4565,
-    zona: 'Belgrano, CABA',
-    fecha: haceHoras(1),
-    infoAdicional: 'Estaba solo en la plaza, con la chapita puesta. Lo tenemos en casa.',
-  },
-  // Perdida sin encontrar: quien escanee su chapita y avise pasa a reencuentro.
-  {
-    id: 5,
     mascotaId: 5,
     autorId: JULIAN_ID,
     estado: 'perdido',
@@ -384,7 +263,7 @@ const reportes = [
     raza: 'Border Collie',
     descripcion: 'Negra y blanca, con la cara partida en dos colores. Collar azul con chapita.',
     foto: 'pipa',
-    etiquetas: ['Chapita Doggy'],
+    etiquetas: ['Collar azul'],
     lat: -34.6067,
     lng: -58.4352,
     zona: 'Caballito, CABA',
@@ -392,63 +271,41 @@ const reportes = [
     radioMetros: 1000,
     infoAdicional: 'Se soltó de la correa en Parque Centenario. Es tímida: mejor no correrla.',
   },
-  // Rocky sigue perdido aunque Martín lo encontró (reporte 10): espera que Marcos lo recupere.
+  // Julián escaneó la chapita de Milo, que no estaba perdido: Sofía ve "¿Se perdió Milo?" con su WhatsApp.
   {
-    id: 7,
-    mascotaId: 6,
-    autorId: MARCOS_ID,
-    estado: 'perdido',
-    nombre: 'Rocky',
-    raza: 'Boxer',
-    descripcion: 'Boxer atigrado con el pecho blanco. Collar de cuero marrón.',
-    foto: 'rocky',
-    etiquetas: ['Collar de cuero'],
-    lat: -34.5458,
-    lng: -58.4636,
-    zona: 'Núñez, CABA',
-    fecha: haceHoras(30),
-    radioMetros: 2000,
-  },
-  // Martín escaneó la chapita de Rocky: con el perdido es un reencuentro, un solo pin donde lo encontró.
-  {
-    id: 10,
-    mascotaId: 6,
-    autorId: MARTIN_ID,
+    id: 2,
+    mascotaId: 3,
+    autorId: JULIAN_ID,
     estado: 'encontrado',
-    nombre: 'Rocky',
-    raza: 'Boxer',
-    descripcion: 'Boxer atigrado con el pecho blanco. Collar de cuero marrón.',
-    foto: 'rocky',
+    nombre: 'Milo',
+    raza: 'Mestizo',
+    descripcion: 'Marrón con el pecho y las patas blancas. Orejas caídas.',
+    foto: 'milo',
     etiquetas: [],
-    lat: -34.5531,
-    lng: -58.4802,
-    zona: 'Saavedra, CABA',
-    fecha: haceHoras(3),
-    infoAdicional: 'Estaba atado en la puerta de un kiosco, con la chapita puesta. Lo tenemos en casa.',
+    lat: -34.5994,
+    lng: -58.4397,
+    zona: 'Villa Crespo, CABA',
+    fecha: haceHoras(1),
+    infoAdicional: 'Andaba solo por Corrientes y Scalabrini Ortiz, con la chapita. Lo tengo en casa.',
   },
 ];
 
 /** Asignaciones de personas a mascotas. El nombre y la foto salen del usuario. */
 const cuidadores = [
   { id: 1, mascotaId: 1, usuarioId: SOFIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
-  { id: 2, mascotaId: 1, usuarioId: CARLOS_ID, rol: 'dueno', detalle: 'Co-tutor', tipo: 'familia' },
-  { id: 3, mascotaId: 1, usuarioId: VETERINARIA_ID, rol: 'invitado', detalle: 'Dra. Martínez', tipo: 'clinica' },
-  { id: 4, mascotaId: 2, usuarioId: SOFIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
+  { id: 2, mascotaId: 2, usuarioId: SOFIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
+  // Julián pasea a Roco: Familia y Cuidadores con otra persona, y "Quitar" para Sofía.
   {
-    id: 5,
+    id: 3,
     mascotaId: 2,
-    usuarioId: MARCOS_ID,
+    usuarioId: JULIAN_ID,
     rol: 'invitado',
     detalle: 'Paseos de lunes a viernes (10-12 hs)',
     tipo: 'paseador',
   },
-  { id: 6, mascotaId: 3, usuarioId: SOFIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
-  { id: 7, mascotaId: 3, usuarioId: SOL_ID, rol: 'dueno', detalle: 'Hogar secundario', tipo: 'familia' },
-  { id: 8, mascotaId: 4, usuarioId: LUCIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
-  { id: 9, mascotaId: 5, usuarioId: JULIAN_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
-  { id: 10, mascotaId: 6, usuarioId: MARCOS_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
-  { id: 11, mascotaId: 7, usuarioId: MARTIN_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
-  { id: 12, mascotaId: 8, usuarioId: SOL_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
+  { id: 4, mascotaId: 3, usuarioId: SOFIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
+  { id: 5, mascotaId: 4, usuarioId: LUCIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
+  { id: 6, mascotaId: 5, usuarioId: JULIAN_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
 ];
 
 /**
@@ -469,43 +326,18 @@ const invitaciones = [
 const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
     email: 'sofia.romero@mail.com',
-    quien: 'Sofía, tutora de Luna, Roco y Milo',
-    mostrar: '"Alguien encontró a Milo. ¿Se perdió Milo?" con WhatsApp a Valentina ("Sí, se perdió" o "No, está conmigo"); carnet de Luna (refuerzos próximos y vencidos) y de Roco (una sola vacuna); Agenda; código TOBY2026.',
+    quien: 'Sofía, dueña de Luna, Roco y Milo',
+    mostrar: '"Alguien encontró a Milo. ¿Se perdió Milo?" con WhatsApp a Julián; carnet de Luna (refuerzos próximos y vencidos); Agenda; Familia y Cuidadores (Julián pasea a Roco); código TOBY2026. En vivo: reportar a Luna como perdida.',
   },
   {
     email: 'lucia.gomez@mail.com',
-    quien: 'Lucía, tutora de Toby',
-    mostrar: 'Encontré una mascota → escanear el QR de Pipa (perdida): al publicar es un reencuentro y aparece WhatsApp a Julián. El de Luna (no perdida): Sofía ve "¿Se perdió Luna?".',
+    quien: 'Lucía, dueña de Toby',
+    mostrar: 'En vivo: "Encontré una mascota" → escanear el QR de Luna → reencuentro y WhatsApp a Sofía. Generó el código TOBY2026.',
   },
   {
     email: 'julian.fernandez@mail.com',
-    quien: 'Julián, tutor de Pipa (perdida en Caballito)',
-    mostrar: 'Descargar o compartir el QR de Pipa para escanearlo con otra cuenta; editar el reporte o "Ya apareció".',
-  },
-  {
-    email: 'valentina.perez@mail.com',
-    quien: 'Valentina, encontró a Milo escaneando su chapita',
-    mostrar: 'Su encontrado de Milo en Perdidos, con WhatsApp a Sofía.',
-  },
-  {
-    email: 'contacto@vetsanroque.com',
-    quien: 'Vet. San Roque, clínica invitada en Luna',
-    mostrar: 'Teléfono fijo: si encuentra una mascota, la familia no le puede escribir por WhatsApp.',
-  },
-  {
-    email: 'carlos.romero@mail.com',
-    quien: 'Carlos, co-tutor de Luna',
-    mostrar: 'Ve a Luna y su carnet.',
-  },
-  {
-    email: 'marcos.diaz@mail.com',
-    quien: 'Marcos, tutor de Rocky (perdido en Núñez, encontrado por Martín en Saavedra)',
-    mostrar: '"¡Encontraron a Rocky!" con el contacto de Martín; en Perdidos, un solo pin verde de "¡Reencuentro!"; "Ya volvió a casa" cierra los dos como "Devuelta a su familia".',
-  },
-  {
-    email: 'martin.lopez@mail.com / sol.romero@mail.com',
-    quien: 'Martín y Sol',
-    mostrar: 'Perdidos sin encontrar: Simba, de Martín (Palermo), y Nieve, de Sol (Villa Urquiza). Martín publicó el encontrado de Rocky y ve el WhatsApp de Marcos.',
+    quien: 'Julián, vecino: dueño de Pipa (perdida) y paseador de Roco',
+    mostrar: 'Pipa en el mapa; su encontrado de Milo con WhatsApp a Sofía.',
   },
 ];
 

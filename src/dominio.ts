@@ -58,22 +58,9 @@ export const CLAVES_FOTO_SEED = [
   'milo',
   'toby',
   'pipa',
-  'simba',
-  'sin-collar',
-  'nieve',
-  'caniche',
-  'rocky',
-  'labrador',
-  'salchicha',
   'sofia',
-  'carlos',
-  'martin',
-  'valentina',
   'julian',
-  'marcos',
-  'sol',
   'lucia',
-  'vet-san-roque',
 ] as const;
 
 /**
