@@ -62,17 +62,19 @@ El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de es
 
 | Usuario | Email | Para qué sirve |
 | --- | --- | --- |
-| Sofía Romero | `sofia.romero@mail.com` | La usuaria principal: tutora de Luna (golden), Roco (bulldog francés) y Milo (mestizo). Ve "Alguien encontró a Milo. ¿Se perdió Milo?" (Valentina escaneó su QR sin que estuviera perdido), con el contacto de Valentina |
-| Lucía Gómez | `lucia.gomez@mail.com` | Tutora de Toby (beagle); generó el código `TOBY2026` para Sofía. Escaneando el QR de Pipa ve el celular de Julián y WhatsApp |
-| Julián Fernández | `julian.fernandez@mail.com` | Tutor de Pipa (border collie), perdida con QR en Caballito |
-| Valentina Pérez | `valentina.perez@mail.com` | Encontró a Milo escaneando su chapita: ve el WhatsApp de Sofía en su encontrado |
-| Carlos Romero | `carlos.romero@mail.com` | Co-tutor (dueño) de Luna |
-| Sol Romero | `sol.romero@mail.com` | Dueña de Milo (hogar secundario) y de Nieve (spitz), perdida en Villa Urquiza |
-| Marcos Díaz | `marcos.diaz@mail.com` | Tutor de Rocky (boxer), perdido en Núñez y encontrado por Martín en Saavedra, todavía sin recuperar: los dos reportes activos, un solo pin verde de "¡Reencuentro!" donde lo encontraron. También es paseador de Roco (invitado) |
-| Vet. San Roque | `contacto@vetsanroque.com` | Clínica invitada en Luna, con teléfono fijo (sin WhatsApp) |
-| Martín López | `martin.lopez@mail.com` | Dueño de Simba (golden), perdido en Palermo; encontró a Rocky escaneando su chapita y ve el WhatsApp de Marcos |
+| Sofía Romero | `sofia.romero@mail.com` | La usuaria principal: dueña de Luna (golden), Roco (bulldog francés) y Milo (mestizo), con carnet, turnos y fotos. Es la dueña en el flujo de perdidos: ve "Alguien encontró a Milo. ¿Se perdió Milo?" con WhatsApp a Julián. Su teléfono sale de `TELEFONO_DEMO_SOFIA` |
+| Lucía Gómez | `lucia.gomez@mail.com` | Dueña de Toby (beagle). Generó el código `TOBY2026` para que Sofía lo acepte como invitada (roles dueño e invitado). En la demo en vivo escanea el QR de Luna |
+| Julián Fernández | `julian.fernandez@mail.com` | Vecino: dueño de Pipa (border collie), perdida en Caballito (el mapa no arranca vacío); paseador de Roco (invitado); ya escaneó el QR de Milo sin que estuviera perdido |
 
-Además: 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, y 6 reportes en Palermo, Belgrano, Villa Urquiza, Caballito, Núñez y Saavedra: 4 perdidos (Simba, Nieve, Pipa y Rocky) y 2 encontrados por QR (Milo, el caso "¿Se perdió…?", y Rocky, el reencuentro). No hay encontrados anónimos: todo encontrado se publica escaneando la chapita. Las mascotas son 8 (se sumaron Simba, de Martín, y Nieve, de Sol, que antes eran perdidos sin mascota registrada). Todos los usuarios, mascotas y reportes tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
+Además: 5 mascotas (Luna, Roco y Milo de Sofía; Toby de Lucía; Pipa de Julián), 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, 6 asignaciones (cada dueño y Julián como paseador de Roco), el código `TOBY2026` sin usar y 2 reportes: el perdido de Pipa y el encontrado de Milo por QR (el caso "¿Se perdió…?"). El reencuentro no viene cargado: se muestra en vivo (Sofía reporta a Luna y Lucía escanea su QR). Todos los usuarios y mascotas tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
+
+**Teléfono de Sofía para la demo.** Para que "Escribirle por WhatsApp" abra un celular real, poné el número en el `.env` (no se versiona) antes del `npm run db:reset`:
+
+```
+TELEFONO_DEMO_SOFIA=5491123456789
+```
+
+Va con el formato 5491…, sin + ni espacios (54, el 9 de celular, la característica sin 0 y el número sin 15). El seed lo valida con la misma regla que el registro y, si no es un celular argentino válido, corta con un error. Si queda vacía, Sofía tiene un número inventado, igual que Lucía y Julián. El número real nunca queda escrito en el repo, y `npm test` no lo usa (vacía la variable para su base).
 
 ### Variables de entorno
 
@@ -81,6 +83,7 @@ Además: 13 registros de carnet (vacunas con refuerzo próximo y vencido, despar
 | `DATABASE_URL` | `file:./dev.db` | Archivo de la base SQLite. Sin ella la API no arranca ("Falta DATABASE_URL en el .env") |
 | `PORT` | `3000` | Puerto de la API |
 | `UPLOADS_DIR` | `uploads` | Carpeta de las fotos subidas (las pruebas usan una temporal) |
+| `TELEFONO_DEMO_SOFIA` | vacía | Celular de Sofía en el seed (5491…, sin + ni espacios); vacía, uno inventado. Ver "Teléfono de Sofía para la demo" |
 
 No hay claves secretas: el token de sesión es aleatorio y se valida contra la base, así que no hace falta un secreto para firmarlo.
 
@@ -294,7 +297,7 @@ Corre `scripts/probar.sh`, que prueba la API con `curl` (más de 440 chequeos):
 
 1. Resetea su propia base, `test.db`, con `npm run db:reset`. El script exporta `DATABASE_URL=file:./test.db` antes del reset y del servidor, así que **`dev.db` no se toca nunca**: los datos con los que probás la app quedan como estaban. Si el script lo corre un agente de IA (por ejemplo, Claude Code), Prisma 7 frena el `--force-reset` y pide que una persona lo confirme: el agente tiene que preguntar y volver a correrlo con `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`. Corrido a mano no pide nada.
 2. Levanta la API en el puerto 3001, así no choca con `npm run dev` en el 3000 (si el 3001 está ocupado, avisa y no corre). Las fotos que sube van a una carpeta temporal (`UPLOADS_DIR`), no a `uploads/`.
-3. Hace login con Sofía, Lucía y Carlos y usa sus tokens. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
+3. Hace login con Sofía, Lucía y Julián (el seed) y registra por la API a los actores extra que necesita (Carlos co-dueño de Luna, una clínica con fijo invitada en Luna, Marcos invitado de Roco y dueño de Rocky, Sol co-dueña de Milo, y Valentina y Martín, que encuentran perros), con sus asignaciones por SQL y el reencuentro de Rocky. Así el seed queda como la demo mínima. Prueba el registro, el login, el logout y los 401 (sin token, token inválido, vencido o cerrado), y los permisos entre usuarios distintos (Sofía no toca lo de Toby, Lucía no toca lo de Sofía, una cuenta nueva no ve nada).
 4. Prueba todos los endpoints con sus casos de error: datos inválidos, ids inválidos, mascotas ajenas, recursos que no existen, conflictos y códigos ya usados. Los teléfonos, en todos los formatos aceptados (con o sin 0, 15, 9 o +54), el fijo marcado, números de otros países (400 "Solo se aceptan teléfonos de Argentina.") e inválidos; y que `src/lib/telefonos.ts` sea idéntico a `../doggy/mobile/src/utils/telefonos.ts` (si el repo de la app está al lado). Los reportes: que publicar un encontrado deje activo el perdido, que "Ya volvió a casa" cierre el perdido y todos los encontrados como `devuelta`, que un perdido solo quede `aparecio`, que "No, está conmigo" quede `descartado` y que quien no es el autor ni está asignado no pueda cerrar. Los encontrados: solo con el código del QR (400 sin código, también con `mascotaId` o anónimo), con los datos de la mascota aunque el body mande otros, 403 sobre una mascota propia, 409 el segundo del mismo usuario, que cada persona que la encontró vea el contacto de la familia y la familia el de cada una (nadie más), y "Sí, se perdió" (`POST /api/reportes/:id/perdida`) con sus 400, 403, 404 y 409. Quitar invitados: el dueño quita a un invitado (204), un invitado o alguien sin asignar no quitan a nadie (403), un dueño no quita a otro dueño (403) y quitar a quien no está asignado da 404. Borrar una mascota: una invitada y un tercero reciben 403, y cuando la borra la dueña no queda ninguna fila relacionada (carnet, turnos, reportes con etiquetas, códigos, asignaciones) ni sus fotos en el disco. También chequea partes del contenido (que no salga `passwordHash`, que el código de la mascota no cambie, que un reporte cerrado no aparezca, etc.). Las fotos se prueban con archivos mínimos que arma el script: cada formato válido, un texto con extensión `.jpg`, uno de más de 5 MB, sin token, rutas inválidas en los PATCH y que el archivo viejo se borre solo cuando nadie más lo usa.
 5. Muestra una tabla con el endpoint, el caso, el status esperado y el obtenido, marca en rojo los que fallan y al final lista cada falla con la respuesta del servidor. Sale con código 1 si algo falla.
 6. Baja el servidor al terminar.
