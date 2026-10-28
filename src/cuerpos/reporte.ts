@@ -7,7 +7,10 @@
  * En el PATCH no se puede cambiar el estado ni la mascota, y `cerrado: true`
  * cierra el reporte ("Ya apareció").
  *
- * Si el reporte es de una mascota registrada (`mascotaId`), el nombre y la
+ * Un encontrado se vincula a una mascota con el `codigo` del QR de su chapita
+ * o con su `mascotaId` (desde "Encontré a …" en un perdido del mapa).
+ *
+ * Si el reporte es de una mascota registrada (`mascotaId` o `codigo`), el nombre y la
  * raza no se leen del body: los pone la ruta desde la mascota, así quien la
  * encontró por el QR no puede cambiar los datos con los que la ve su familia.
  */
@@ -19,6 +22,7 @@ import {
   RADIOS_BUSQUEDA,
   type EstadoReporte,
 } from '../dominio';
+import { MENSAJE_CODIGO_INVALIDO, normalizarCodigoMascota } from '../lib/codigos';
 import {
   DatoInvalido,
   leerCuerpo,
@@ -63,6 +67,12 @@ export type DatosReporte = ContenidoReporte & {
   estado: EstadoReporte;
   mascotaId: number | null;
 };
+
+/**
+ * Body de un reporte nuevo: los datos más el código del QR, que identifica la
+ * mascota de un encontrado y prueba que quien la reporta tiene la chapita.
+ */
+export type ReporteNuevo = DatosReporte & { codigo: string | null };
 
 /** Cambios de un reporte, con el pedido de cierre. */
 export type CambiosReporte = Partial<ContenidoReporte> & { cerrado?: true };
@@ -130,8 +140,14 @@ const LECTORES_CONTENIDO: Lectores<ContenidoReporte> = {
   infoAdicional: (v) => leerTextoOpcional(v, 'Información adicional', validarInfoAdicional, true),
 };
 
-const LECTORES_NUEVO: Lectores<DatosReporte> = {
+const LECTORES_NUEVO: Lectores<ReporteNuevo> = {
   ...LECTORES_CONTENIDO,
+  codigo: (v) => {
+    if (v === undefined || v === null) return null;
+    const codigo = typeof v === 'string' ? normalizarCodigoMascota(v) : null;
+    if (codigo === null) throw new DatoInvalido(MENSAJE_CODIGO_INVALIDO);
+    return codigo;
+  },
   estado: (v) => {
     if (!esValorDe(ESTADOS_REPORTE, v)) throw new DatoInvalido('Elegí si se perdió o la encontraste.');
     return v;
@@ -144,7 +160,7 @@ const LECTORES_NUEVO: Lectores<DatosReporte> = {
  * Lectores de un reporte nuevo de una mascota registrada: el nombre y la raza
  * quedan vacíos y la ruta los completa con los de la mascota.
  */
-const LECTORES_NUEVO_CON_MASCOTA: Lectores<DatosReporte> = {
+const LECTORES_NUEVO_CON_MASCOTA: Lectores<ReporteNuevo> = {
   ...LECTORES_NUEVO,
   nombre: () => '',
   raza: () => '',
@@ -176,17 +192,22 @@ const LECTORES_CAMBIOS_CON_MASCOTA: Lectores<Omit<CambiosReporte, 'nombre' | 'ra
 const MENSAJE_RADIO_SOLO_PERDIDOS = 'El radio de búsqueda es solo para reportes de mascotas perdidas.';
 
 /**
- * Lee un reporte nuevo. Uno de perdida tiene que decir qué mascota es.
+ * Lee un reporte nuevo. Uno de perdida tiene que decir qué mascota es (por
+ * `mascotaId`); el código del QR es solo para los encontrados.
  * @param body `req.body`
  * @returns los datos validados o el error del 400
  */
-export function leerReporteNuevo(body: unknown): Resultado<DatosReporte> {
+export function leerReporteNuevo(body: unknown): Resultado<ReporteNuevo> {
   return leerCuerpo(() => {
-    const { mascotaId } = pick(body, ['mascotaId']);
-    const conMascota = mascotaId !== undefined && mascotaId !== null;
+    const { mascotaId, codigo } = pick(body, ['mascotaId', 'codigo']);
+    const conMascota =
+      (mascotaId !== undefined && mascotaId !== null) || (codigo !== undefined && codigo !== null);
     const datos = leerTodos(body, conMascota ? LECTORES_NUEVO_CON_MASCOTA : LECTORES_NUEVO);
     if (datos.estado === 'perdido' && datos.mascotaId === null) {
       throw new DatoInvalido('Elegí la mascota que se perdió.');
+    }
+    if (datos.estado === 'perdido' && datos.codigo !== null) {
+      throw new DatoInvalido('El código del QR es solo para avisar que la encontraste.');
     }
     if (datos.estado === 'encontrado' && datos.radioMetros !== null) {
       throw new DatoInvalido(MENSAJE_RADIO_SOLO_PERDIDOS);

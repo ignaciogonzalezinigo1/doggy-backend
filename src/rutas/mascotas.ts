@@ -16,7 +16,13 @@ import {
   mascotasAsignadasA,
   rolEn,
 } from '../lib/asignaciones';
-import { generarCodigoMascota, generarToken, normalizarCodigoMascota } from '../lib/codigos';
+import {
+  generarCodigoMascota,
+  generarToken,
+  MENSAJE_CODIGO_INVALIDO,
+  MENSAJE_CODIGO_NO_EXISTE,
+  normalizarCodigoMascota,
+} from '../lib/codigos';
 import { DatoInvalido, leerCuerpo, MENSAJE_ID_INVALIDO, parseId, pick } from '../lib/entrada';
 import { esErrorPrisma, responderError, responderErrorInterno } from '../lib/errores';
 import { borrarFotoSiHuerfana } from '../lib/fotos';
@@ -38,8 +44,6 @@ const ASIGNACION_CREADOR = { rol: 'dueno', detalle: 'Tutor/a', tipo: 'familia' }
 const MENSAJE_NO_ASIGNADO = 'No estás asignado a esta mascota.';
 const MENSAJE_UNICO_DUENO = 'Sos el único dueño. Asigná a otra persona como dueña antes de irte.';
 const MENSAJE_NO_QUITA_DUENO = 'No podés quitar a otro dueño.';
-const MENSAJE_CODIGO_INVALIDO = 'Ese código no es de una chapita Doggy (DOGGY-XXXX-NOMBRE).';
-const MENSAJE_CODIGO_NO_EXISTE = 'No hay ninguna mascota registrada con ese código.';
 
 /**
  * GET /api/mascotas: mascotas a las que está asignado el usuario (como dueño o

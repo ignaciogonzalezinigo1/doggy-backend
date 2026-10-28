@@ -24,8 +24,10 @@ export type EstadoReporte = (typeof ESTADOS_REPORTE)[number];
  * - devuelta: alguien la encontró y volvió con su familia (se cierran el
  *   perdido y el encontrado de la mascota).
  * - aparecio: se cerró un perdido sin ningún encontrado ("Ya apareció").
+ * - descartado: alguien avisó que la encontró, pero no se había perdido: la
+ *   familia lo descartó con "No, está conmigo" (se cierran los encontrados).
  */
-export const RESULTADOS_REPORTE = ['devuelta', 'aparecio'] as const;
+export const RESULTADOS_REPORTE = ['devuelta', 'aparecio', 'descartado'] as const;
 export type ResultadoReporte = (typeof RESULTADOS_REPORTE)[number];
 
 /**

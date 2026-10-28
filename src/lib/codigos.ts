@@ -40,6 +40,10 @@ function normalizarNombre(nombre: string): string {
   return limpio || SUFIJO_POR_DEFECTO;
 }
 
+/** Mensajes de un código de mascota mal escrito (400) o que no es de nadie (404). */
+export const MENSAJE_CODIGO_INVALIDO = 'Ese código no es de una chapita Doggy (DOGGY-XXXX-NOMBRE).';
+export const MENSAJE_CODIGO_NO_EXISTE = 'No hay ninguna mascota registrada con ese código.';
+
 /**
  * Normaliza un código leído de un QR o tipeado: sin espacios alrededor y en mayúsculas.
  * @param valor código como llegó
