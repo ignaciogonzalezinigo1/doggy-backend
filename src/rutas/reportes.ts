@@ -5,8 +5,9 @@
  * resultado en `resultado`, y deja de salir en el mapa, pero queda el historial.
  *
  * Un "perdido" lo publica la familia. Un "encontrado" lo publica alguien que
- * encontró un perro: vinculado a la mascota (con el QR de su chapita, o desde
- * un perdido del mapa con "Encontré a …") o anónimo, sin mascota. Un perdido y
+ * encontró un perro y escaneó el QR de su chapita: la chapita es la única
+ * prueba de que lo tiene, así que no hay encontrados sin código ni anónimos
+ * (los que quedan en una base vieja se muestran y se cierran igual). Un perdido y
  * un encontrado activos de la misma mascota son un reencuentro: los dos siguen
  * activos hasta que la familia la recupera ("Ya volvió a casa") y ahí se
  * cierran juntos con "devuelta". Un encontrado vinculado sin perdido es el
@@ -20,7 +21,8 @@
  *
  * Lo edita o lo cierra quien lo publicó o cualquier persona asignada a la
  * mascota del reporte (dueño o invitado), así si la encuentra otro integrante
- * de la familia la saca del mapa. Un reporte sin mascota solo lo gestiona su autor.
+ * de la familia la saca del mapa. Un encontrado anónimo de antes solo lo
+ * gestiona su autor.
  */
 
 import { Router } from 'express';
@@ -55,7 +57,6 @@ const MENSAJE_REPORTE_CERRADO = 'Este reporte ya está cerrado.';
 const MENSAJE_YA_REPORTADA = 'Esta mascota ya está reportada como perdida. No se puede reportar de nuevo.';
 const MENSAJE_YA_AVISASTE = 'Ya avisaste que encontraste a esta mascota.';
 const MENSAJE_ES_DE_TU_FAMILIA = 'Esta mascota está en tu cuenta: no hace falta avisar que la encontraste.';
-const MENSAJE_SIN_QR = 'Para avisarle a su familia, escaneá el QR de su chapita.';
 const MENSAJE_OTRO_CODIGO = 'El código del QR no es de esa mascota.';
 const MENSAJE_NO_ES_HALLAZGO = 'Solo se confirma la pérdida desde el aviso de alguien que la encontró.';
 const MENSAJE_SIN_PERMISO_HALLAZGO = 'Solo la familia de la mascota puede confirmar que se perdió.';
@@ -208,33 +209,33 @@ async function cierreDe(
 /** Lo que se usa de la mascota de un reporte nuevo. */
 type MascotaReporte = { id: number; nombre: string; raza: string; foto: string | null; senas: string };
 
-/** Mascota a la que se vincula un reporte nuevo (null si no es de ninguna), o el error a responder. */
+/** Mascota de un reporte nuevo, o el error a responder. */
 type MascotaDelReporte =
-  | { ok: true; mascota: MascotaReporte | null }
+  | { ok: true; mascota: MascotaReporte }
   | { ok: false; status: 400 | 404; error: string };
 
 /**
- * Busca la mascota de un reporte nuevo: por el código del QR si vino (y tiene
- * que coincidir con el `mascotaId`, si también vino) o por su id.
- * @param mascotaId id que vino en el body, o null
- * @param codigo código normalizado del QR, o null
- * @returns la mascota (null si el reporte no es de ninguna) o el error
+ * Busca la mascota de un reporte nuevo: la del código del QR en un encontrado
+ * (tiene que coincidir con el `mascotaId`, si también vino) o la del
+ * `mascotaId` en un perdido.
+ * @param mascotaId id que vino en el body (obligatorio en un perdido)
+ * @param codigo código normalizado del QR (obligatorio en un encontrado)
+ * @returns la mascota o el error
  */
 async function mascotaDelReporte(
   mascotaId: number | null,
   codigo: string | null,
 ): Promise<MascotaDelReporte> {
-  let mascota: MascotaReporte | null = null;
   if (codigo !== null) {
-    mascota = await prisma.mascota.findUnique({ where: { codigo } });
+    const mascota = await prisma.mascota.findUnique({ where: { codigo } });
     if (!mascota) return { ok: false, status: 404, error: MENSAJE_CODIGO_NO_EXISTE };
     if (mascotaId !== null && mascotaId !== mascota.id) {
       return { ok: false, status: 400, error: MENSAJE_OTRO_CODIGO };
     }
-  } else if (mascotaId !== null) {
-    mascota = await prisma.mascota.findUnique({ where: { id: mascotaId } });
-    if (!mascota) return { ok: false, status: 404, error: MENSAJE_MASCOTA_NO_EXISTE };
+    return { ok: true, mascota };
   }
+  const mascota = mascotaId === null ? null : await prisma.mascota.findUnique({ where: { id: mascotaId } });
+  if (!mascota) return { ok: false, status: 404, error: MENSAJE_MASCOTA_NO_EXISTE };
   return { ok: true, mascota };
 }
 
@@ -290,25 +291,23 @@ reportesRouter.get('/', async (req, res) => {
  * POST /api/reportes: publica un reporte. El autor es el usuario de la sesión.
  * - perdido: de una mascota asignada al usuario (`mascotaId`), con radio de
  *   búsqueda; una mascota tiene como mucho un perdido activo.
- * - encontrado vinculado: de una mascota ajena, con el `codigo` del QR de su
- *   chapita (aunque no esté perdida: puede que la familia todavía no sepa que
- *   se escapó) o con su `mascotaId` si tiene un perdido activo ("Encontré a
- *   …" desde el mapa). Sin el QR ni un perdido, cualquiera podría vincularse a
- *   cualquier mascota y ver el contacto de la familia. No se puede sobre una
- *   mascota propia o asignada, y cada usuario tiene como mucho un encontrado
- *   activo por mascota. No cierra el perdido: los dos quedan como reencuentro.
- * - encontrado anónimo: sin `mascotaId` ni `codigo`.
- * Si el reporte es de una mascota, el nombre y la raza salen de ella y no del
- * body. La foto también, salvo que quien la encontró mande una del momento; en
- * un perdido, la descripción son las señas de la mascota.
- * Body: estado, mascotaId o codigo, nombre y raza (sin mascota), descripcion,
- * foto, etiquetas, lat, lng, zona, fecha (ISO), radioMetros (opcional),
- * infoAdicional (opcional).
- * Responde 201 con el ReportePerdida, 400 si un dato no es válido (o el código
- * no es de esa mascota), 403 si reporta perdida una mascota que no tiene
- * asignada, si avisa que encontró una mascota propia o asignada, o si la
- * vincula sin QR a una mascota que no está perdida, 404 si la mascota no
- * existe, 409 si ya hay un perdido activo o ya avisó que la encontró, o 500.
+ *   Body: estado, mascotaId, descripcion, foto, etiquetas, lat, lng, zona,
+ *   fecha (ISO), radioMetros e infoAdicional (opcionales).
+ * - encontrado: de una mascota ajena, con el `codigo` del QR de su chapita
+ *   (aunque no esté perdida: puede que la familia todavía no sepa que se
+ *   escapó). Sin código no hay encontrado (400): la chapita es la única prueba
+ *   de que lo tiene. No se puede sobre una mascota propia o asignada, y cada
+ *   usuario tiene como mucho un encontrado activo por mascota. No cierra el
+ *   perdido: los dos quedan como reencuentro.
+ *   Body: estado, codigo, mascotaId (opcional, tiene que ser el del código),
+ *   lat, lng, zona, fecha (ISO) e infoAdicional (comentario opcional).
+ * El nombre, la raza, la foto y la descripción (las señas) salen de la
+ * mascota; lo que venga en el body para esos campos se ignora.
+ * Responde 201 con el ReportePerdida, 400 si un dato no es válido (también un
+ * encontrado sin código o con un código de otra mascota que el `mascotaId`),
+ * 403 si reporta perdida una mascota que no tiene asignada o avisa que
+ * encontró una mascota propia o asignada, 404 si la mascota no existe, 409 si
+ * ya hay un perdido activo o ya avisó que la encontró, o 500.
  */
 reportesRouter.post('/', async (req, res) => {
   try {
@@ -323,50 +322,39 @@ reportesRouter.post('/', async (req, res) => {
       responderError(res, buscada.status, buscada.error);
       return;
     }
-    let datos: Omit<DatosReporte, 'etiquetas'> = leidos;
     const { mascota } = buscada;
-    if (mascota) {
-      const [rol, perdidoActivo] = await Promise.all([
-        rolEn(mascota.id, req.usuarioId),
-        activoDe(mascota.id, 'perdido'),
-      ]);
-      const perdido = leidos.estado === 'perdido';
-      if (perdido) {
-        if (rol === null) {
-          responderError(res, 403, MENSAJE_SIN_PERMISO_MASCOTA);
-          return;
-        }
-        if (perdidoActivo !== null) {
-          responderError(res, 409, MENSAJE_YA_REPORTADA);
-          return;
-        }
-      } else {
-        if (rol !== null) {
-          responderError(res, 403, MENSAJE_ES_DE_TU_FAMILIA);
-          return;
-        }
-        if (codigo === null && perdidoActivo === null) {
-          responderError(res, 403, MENSAJE_SIN_QR);
-          return;
-        }
-        const yaAviso = await prisma.reportePerdida.findFirst({
-          where: { ...ACTIVOS, mascotaId: mascota.id, estado: 'encontrado', autorId: req.usuarioId },
-          select: { id: true },
-        });
-        if (yaAviso) {
-          responderError(res, 409, MENSAJE_YA_AVISASTE);
-          return;
-        }
+    const rol = await rolEn(mascota.id, req.usuarioId);
+    if (leidos.estado === 'perdido') {
+      if (rol === null) {
+        responderError(res, 403, MENSAJE_SIN_PERMISO_MASCOTA);
+        return;
       }
-      datos = {
-        ...leidos,
-        mascotaId: mascota.id,
-        nombre: mascota.nombre,
-        raza: mascota.raza,
-        foto: perdido ? mascota.foto : (leidos.foto ?? mascota.foto),
-        descripcion: perdido ? mascota.senas : leidos.descripcion,
-      };
+      if ((await activoDe(mascota.id, 'perdido')) !== null) {
+        responderError(res, 409, MENSAJE_YA_REPORTADA);
+        return;
+      }
+    } else {
+      if (rol !== null) {
+        responderError(res, 403, MENSAJE_ES_DE_TU_FAMILIA);
+        return;
+      }
+      const yaAviso = await prisma.reportePerdida.findFirst({
+        where: { ...ACTIVOS, mascotaId: mascota.id, estado: 'encontrado', autorId: req.usuarioId },
+        select: { id: true },
+      });
+      if (yaAviso) {
+        responderError(res, 409, MENSAJE_YA_AVISASTE);
+        return;
+      }
     }
+    const datos: Omit<DatosReporte, 'etiquetas'> = {
+      ...leidos,
+      mascotaId: mascota.id,
+      nombre: mascota.nombre,
+      raza: mascota.raza,
+      foto: mascota.foto,
+      descripcion: mascota.senas,
+    };
     const reporte = await prisma.reportePerdida.create({
       data: { ...datos, autorId: req.usuarioId, etiquetas: crearEtiquetas(etiquetas) },
       include: INCLUIR_ETIQUETAS,
