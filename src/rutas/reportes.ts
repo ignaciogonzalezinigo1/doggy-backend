@@ -169,6 +169,22 @@ async function familiasDe(
   return familias;
 }
 
+/**
+ * Familia de una sola mascota, para quien acaba de publicar su encontrado:
+ * la misma regla que `familiasDe` en GET (quien publicó el perdido activo o un
+ * dueño).
+ * @param mascotaId mascota del encontrado
+ * @returns el contacto de la familia, o undefined si nadie cargó teléfono
+ */
+async function familiaDe(mascotaId: number): Promise<Contacto | undefined> {
+  const perdido = await prisma.reportePerdida.findFirst({
+    where: { ...ACTIVOS, mascotaId, estado: 'perdido' },
+    select: { autor: { select: { nombre: true, telefonoEmergencia: true } } },
+  });
+  const autores = new Map<number, DatosContacto>(perdido ? [[mascotaId, perdido.autor]] : []);
+  return (await familiasDe([mascotaId], autores)).get(mascotaId);
+}
+
 /** Cómo se cierra un reporte: con qué resultado y qué otros reportes de la mascota arrastra. */
 type Cierre = { resultado: ResultadoReporte | null; otrosIds: number[] };
 
@@ -303,7 +319,8 @@ reportesRouter.get('/', async (req, res) => {
  *   lat, lng, zona, fecha (ISO) e infoAdicional (comentario opcional).
  * El nombre, la raza, la foto y la descripción (las señas) salen de la
  * mascota; lo que venga en el body para esos campos se ignora.
- * Responde 201 con el ReportePerdida, 400 si un dato no es válido (también un
+ * Responde 201 con el ReportePerdida (un encontrado ya trae el `contacto` de
+ * la familia, como en GET), 400 si un dato no es válido (también un
  * encontrado sin código o con un código de otra mascota que el `mascotaId`),
  * 403 si reporta perdida una mascota que no tiene asignada o avisa que
  * encontró una mascota propia o asignada, 404 si la mascota no existe, 409 si
@@ -359,7 +376,10 @@ reportesRouter.post('/', async (req, res) => {
       data: { ...datos, autorId: req.usuarioId, etiquetas: crearEtiquetas(etiquetas) },
       include: INCLUIR_ETIQUETAS,
     });
-    res.status(201).json(aReporte(reporte));
+    // Quien publica un encontrado ve el contacto de la familia ya en la
+    // respuesta, igual que en GET: la app guarda este reporte tal cual.
+    const contacto = reporte.estado === 'encontrado' ? await familiaDe(mascota.id) : undefined;
+    res.status(201).json(aReporte(reporte, contacto));
   } catch (error) {
     responderErrorInterno(res, error, 'POST /api/reportes');
   }

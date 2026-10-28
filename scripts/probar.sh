@@ -663,6 +663,7 @@ t "encontrado sin código (con mascotaId)" 400 POST /api/reportes "{\"estado\":\
 v "mensaje del 400" "Escaneá el QR de su chapita para avisar que la encontraste." "$(jget .error)"
 t "encontrado sin código ni mascota (anónimo)" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Mestizo\",\"descripcion\":\"Perro marrón chico\",\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 t "encontrado con código de mascota ajena, que no está perdida" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\" doggy-7741-toby \",\"nombre\":\"Firulais\",\"raza\":\"Caniche\",\"descripcion\":\"Otro texto\",\"foto\":\"milo\",\"etiquetas\":[\"Collar\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"infoAdicional\":\"La vi en la plaza, tiene collar rojo\"}"
+v "la respuesta ya trae el WhatsApp de la familia (Lucía, dueña de Toby)" sí "$(jok 'r.contacto.nombre === "Lucía" && /^\+549\d{10}$/.test(r.contacto.telefono)')"
 QR_PROPIO=$(jget .id)
 v "nombre, raza, foto y señas salen de la mascota, no del body" "$(sql "select nombre || ' · ' || raza || ' · ' || foto || ' · ' || senas from Mascota where id = 4;")" "$(jmap 'r.nombre + " · " + r.raza + " · " + r.foto + " · " + r.descripcion')"
 v "sin etiquetas" "" "$(jget .etiquetas)"
@@ -771,6 +772,7 @@ t "código que no es de nadie" 404 POST /api/reportes "{\"estado\":\"encontrado\
 t "código de otra mascota que el mascotaId" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":2,\"codigo\":\"DOGGY-8492-LUNA\",$CUERPO_HALLAZGO}"
 t "perdido con código" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":4,\"codigo\":\"DOGGY-7741-TOBY\",\"radioMetros\":500,$CUERPO_HALLAZGO}"
 t "QR de Luna sin perdido (caso dudoso)" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-8492-LUNA\",$CUERPO_HALLAZGO}"
+v "la respuesta ya trae el contacto de la dueña, el de la base" "Sofía $(sql "select telefonoEmergencia from Usuario where id = 1;")" "$(jmap 'r.contacto.nombre + " " + r.contacto.telefono')"
 E_DUDA=$(jget .id)
 v "vinculado a Luna" "1 Luna" "$(jget .mascotaId) $(jget .nombre)"
 t "segundo encontrado de Luna de Lucía" 409 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-8492-LUNA\",$CUERPO_HALLAZGO}"
@@ -806,6 +808,7 @@ t "otro perdido de Luna" 409 POST /api/reportes "$PERDIDO_LUNA"
 como "$VALENTINA"
 t "encontrado de una mascota perdida sin código" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
 t "otra persona escanea el QR de Luna perdida" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-8492-LUNA\",$CUERPO_HALLAZGO}"
+v "la respuesta trae a Sofía, que publicó el perdido" Sofía "$(jget .contacto.nombre)"
 E_MAPA=$(jget .id)
 t "reportes activos (Valentina)" 200 GET /api/reportes
 v "su encontrado trae a Sofía, que publicó el perdido" Sofía "$(jmap "r.find((x) => x.id === $E_MAPA).contacto.nombre")"
