@@ -17,7 +17,9 @@
  * Las pruebas (`npm test`) parten de estos datos: Sofía (1) tiene a Luna,
  * Roco y Milo (1 a 3), Lucía (20) a Toby (4), Roco tiene una sola dueña, y
  * ninguna de esas cuatro mascotas está reportada como perdida. Rocky (6), de
- * Marcos, está perdido y con un encontrado de Martín todavía sin recuperar.
+ * Marcos, está perdido y con un encontrado de Martín todavía sin recuperar
+ * (reencuentro), y Milo tiene un encontrado de Valentina por QR sin estar
+ * perdido (caso dudoso).
  */
 
 import bcrypt from 'bcryptjs';
@@ -242,7 +244,7 @@ const mascotas = [
     senas: 'Negra y blanca, con la cara partida en dos colores. Collar azul con chapita.',
     foto: 'pipa',
   },
-  // Perdido y encontrado: en el mapa es un solo pin, con "¡La encontraron!".
+  // Perdido y encontrado: en el mapa es un solo pin verde de "¡Reencuentro!".
   {
     id: 6,
     tutorId: MARCOS_ID,
@@ -343,7 +345,7 @@ const reportes = [
     fecha: haceHoras(22),
     radioMetros: 500,
   },
-  // Valentina escaneó la chapita de Milo: Sofía ve "¡Encontraron a Milo!" con el contacto de Valentina.
+  // Valentina escaneó la chapita de Milo, que no estaba perdido: Sofía ve "¿Se perdió Milo?" con el contacto de Valentina.
   {
     id: 4,
     mascotaId: 3,
@@ -439,7 +441,7 @@ const reportes = [
     zona: 'Palermo, CABA',
     fecha: haceHoras(12),
   },
-  // Martín escaneó la chapita de Rocky: no se dibuja aparte, se ve en el detalle del perdido.
+  // Martín escaneó la chapita de Rocky: con el perdido es un reencuentro, un solo pin donde lo encontró.
   {
     id: 10,
     mascotaId: 6,
@@ -497,12 +499,12 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
     email: 'sofia.romero@mail.com',
     quien: 'Sofía, tutora de Luna, Roco y Milo',
-    mostrar: '"¡Encontraron a Milo!" con WhatsApp a Valentina; carnet de Luna (refuerzos próximos y vencidos) y de Roco (una sola vacuna); Agenda; código TOBY2026.',
+    mostrar: '"Alguien encontró a Milo. ¿Se perdió Milo?" con WhatsApp a Valentina ("Sí, se perdió" o "No, está conmigo"); carnet de Luna (refuerzos próximos y vencidos) y de Roco (una sola vacuna); Agenda; código TOBY2026.',
   },
   {
     email: 'lucia.gomez@mail.com',
     quien: 'Lucía, tutora de Toby',
-    mostrar: 'Escanear el QR de Pipa (perdida): celular de Julián y "Avisar por WhatsApp". Escanear el de Luna: solo "Su familia: Sofía".',
+    mostrar: 'En Perdidos, "Encontré a Pipa" desde su detalle: después de publicar, WhatsApp a Julián. Escanear el QR de Luna y avisar: Sofía ve "¿Se perdió Luna?".',
   },
   {
     email: 'julian.fernandez@mail.com',
@@ -512,7 +514,7 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
     email: 'valentina.perez@mail.com',
     quien: 'Valentina, encontró a Milo y a un mestizo en Belgrano',
-    mostrar: 'Sus reportes de encontrado en Perdidos.',
+    mostrar: 'Su encontrado de Milo en Perdidos, con el contacto de Sofía.',
   },
   {
     email: 'contacto@vetsanroque.com',
@@ -527,12 +529,12 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
     email: 'marcos.diaz@mail.com',
     quien: 'Marcos, tutor de Rocky (perdido en Núñez, encontrado por Martín en Saavedra)',
-    mostrar: 'Perdidos: un solo pin de Rocky con "¡La encontraron!" y el hallazgo en el detalle; "Ya volvió a casa" cierra los dos como "Devuelta a su familia".',
+    mostrar: '"¡Encontraron a Rocky!" con el contacto de Martín; en Perdidos, un solo pin verde de "¡Reencuentro!"; "Ya volvió a casa" cierra los dos como "Devuelta a su familia".',
   },
   {
     email: 'martin.lopez@mail.com / sol.romero@mail.com',
     quien: 'Martín y Sol',
-    mostrar: 'Perdidos sin chapita: Simba (Palermo) y Nieve (Villa Urquiza). Martín publicó el encontrado de Rocky.',
+    mostrar: 'Perdidos sin chapita: Simba (Palermo) y Nieve (Villa Urquiza). Martín publicó el encontrado de Rocky y ve el contacto de Marcos.',
   },
 ];
 
