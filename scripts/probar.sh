@@ -63,6 +63,8 @@ command -v curl > /dev/null || abortar "falta curl."
 # una variable que ya está definida, así que el .env no la cambia.
 DB="$RAIZ/test.db"
 export DATABASE_URL="file:./test.db"
+# El seed usa un teléfono inventado para Sofía, aunque el .env tenga el real de la demo.
+export TELEFONO_DEMO_SOFIA=""
 
 if curl -s -o /dev/null "$API/api/health"; then
   abortar "ya hay algo escuchando en el puerto $PUERTO. Bajalo y volvé a correr las pruebas."
@@ -176,6 +178,20 @@ login() {
     node -e 'let d = ""; process.stdin.on("data", (c) => (d += c)).on("end", () => { const t = JSON.parse(d).token; if (!t) process.exit(1); console.log(t); })'
 }
 
+# Registra un usuario por la API (contraseña del seed) y devuelve su token. Corta las pruebas si falla.
+# El body va desde un archivo, como en `t`, para que no se rompan las tildes en Windows.
+# Uso: TOKEN_X=$(registrar <nombre> <apellido> <email> <telefono> [fijo])
+registrar() {
+  local fijo=false
+  [ "${5:-}" = fijo ] && fijo=true
+  printf '%s' "{\"nombre\":\"$1\",\"apellido\":\"$2\",\"email\":\"$3\",\"telefonoEmergencia\":\"$4\",\"telefonoFijo\":$fijo,\"password\":\"$PASSWORD_SEED\"}" > "$TMP/registro"
+  curl -s -X POST -H 'Content-Type: application/json' --data-binary "@$TMP/registro" "$API/api/auth/registro" |
+    node -e 'let d = ""; process.stdin.on("data", (c) => (d += c)).on("end", () => { const t = JSON.parse(d).token; if (!t) process.exit(1); console.log(t); })'
+}
+
+# Id de un usuario por su email.
+id_de() { sql "select id from Usuario where email = '$1';"; }
+
 # Vence en la base la última sesión abierta (para probar un token vencido).
 vencer_ultima_sesion() {
   sql "update Sesion set vence = '$(fecha -u -1H +%Y-%m-%dT%H:%M:%S.000+00:00)' where id = (select max(id) from Sesion);"
@@ -227,12 +243,31 @@ echo "no soy una foto" > "$F_TXT"
 # Ruta con el formato correcto pero sin archivo.
 RUTA_INEXISTENTE="/uploads/$(printf '0%.0s' $(seq 32)).jpg"
 
-# Sesiones de los usuarios del seed que se usan en las pruebas.
+# Sesiones de los usuarios del seed (la demo: Sofía, Lucía y Julián).
 SOFIA=$(login sofia.romero@mail.com) || abortar "no se pudo hacer login con Sofía."
 LUCIA=$(login lucia.gomez@mail.com) || abortar "no se pudo hacer login con Lucía."
-CARLOS=$(login carlos.romero@mail.com) || abortar "no se pudo hacer login con Carlos."
-VALENTINA=$(login valentina.perez@mail.com) || abortar "no se pudo hacer login con Valentina."
-MARTIN=$(login martin.lopez@mail.com) || abortar "no se pudo hacer login con Martín."
+JULIAN=$(login julian.fernandez@mail.com) || abortar "no se pudo hacer login con Julián."
+
+# Actores extra: el seed es la demo mínima y las pruebas necesitan más gente.
+# Se registran por la API y se asignan con SQL:
+# - Carlos, co-dueño de Luna; la Clínica San Roque (teléfono fijo), invitada en Luna;
+# - Marcos, invitado de Roco y dueño de Rocky (perdido); Sol, co-dueña de Milo;
+# - Valentina y Martín, que no tienen mascotas y encuentran perros (Martín encuentra a Rocky).
+CARLOS=$(registrar Carlos Romero carlos.romero@mail.com "11 6120-4455") || abortar "no se pudo registrar a Carlos."
+VALENTINA=$(registrar Valentina Pérez valentina.perez@mail.com "11 6274-9031") || abortar "no se pudo registrar a Valentina."
+MARTIN=$(registrar Martín López martin.lopez@mail.com "11 5320-1187") || abortar "no se pudo registrar a Martín."
+MARCOS=$(registrar Marcos Díaz marcos.diaz@mail.com "11 5874-2216") || abortar "no se pudo registrar a Marcos."
+SOL=$(registrar Sol Romero sol.romero@mail.com "11 6041-3378") || abortar "no se pudo registrar a Sol."
+VET=$(registrar Clínica "San Roque" contacto@vetsanroque.com "11 4777-3020" fijo) || abortar "no se pudo registrar a la clínica."
+CARLOS_ID=$(id_de carlos.romero@mail.com); MARCOS_ID=$(id_de marcos.diaz@mail.com); VALENTINA_ID=$(id_de valentina.perez@mail.com)
+SOL_ID=$(id_de sol.romero@mail.com); VET_ID=$(id_de contacto@vetsanroque.com)
+sql "insert into Cuidador (mascotaId, usuarioId, rol, detalle, tipo) values (1, $CARLOS_ID, 'dueno', 'Co-tutor', 'familia'), (1, $VET_ID, 'invitado', 'Dra. Martínez', 'clinica'), (2, $MARCOS_ID, 'invitado', 'Paseos', 'paseador'), (3, $SOL_ID, 'dueno', 'Hogar secundario', 'familia');"
+sql "insert into Mascota (tutorId, nombre, raza, fechaNacimiento, codigo, senas, foto) values ($MARCOS_ID, 'Rocky', 'Boxer', '2019-11-12T00:00:00.000+00:00', 'DOGGY-1953-ROCKY', 'Boxer atigrado con el pecho blanco.', NULL);"
+ROCKY=$(sql "select id from Mascota where codigo = 'DOGGY-1953-ROCKY';")
+sql "insert into Cuidador (mascotaId, usuarioId, rol, detalle, tipo) values ($ROCKY, $MARCOS_ID, 'dueno', 'Tutor', 'familia');"
+# Rocky: perdido de Marcos y encontrado por Martín (un reencuentro).
+P_ROCKY=$(reporte_de "$MARCOS_ID" "$ROCKY" perdido Rocky)
+E_ROCKY=$(reporte_de "$(id_de martin.lopez@mail.com)" "$ROCKY" encontrado Rocky)
 
 seccion "Auth: registro"
 como ""
@@ -374,23 +409,24 @@ v "fechas sin hora (AAAA-MM-DD)" sí "$(jok 'r.every((x) => /^\d{4}-\d{2}-\d{2}$
 t "turnos de las mascotas asignadas" 200 GET /api/turnos
 v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4)')"
 t "reportes activos" 200 GET /api/reportes
-v "los 6 del seed, con etiquetas como lista" sí "$(jok 'r.length === 6 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "los 2 del seed y los 2 de Rocky, con etiquetas como lista" sí "$(jok 'r.length === 4 && r.every((x) => Array.isArray(x.etiquetas))')"
 v "todos son de una mascota registrada (no hay anónimos)" sí "$(jok 'r.every((x) => x.mascotaId !== null)')"
-v "Rocky: el perdido y el encontrado de Martín, los dos activos" "perdido,encontrado" "$(jmap 'r.filter((x) => x.mascotaId === 6).map((x) => x.estado).join()')"
-v "solo trae contacto el encontrado de Milo" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
-v "es el de Valentina, que lo encontró (en E.164)" "Valentina +5491162749031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
+v "Pipa perdida y Milo encontrado por Julián" "perdido Pipa,encontrado Milo" "$(jmap 'r.filter((x) => x.autorId === 4).map((x) => x.estado + " " + x.nombre).join()')"
+v "Rocky: el perdido y el encontrado de Martín, los dos activos" "perdido,encontrado" "$(jmap "r.filter((x) => x.mascotaId === $ROCKY).map((x) => x.estado).join()")"
+v "solo trae contacto el encontrado de Milo" 2 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
+v "es el de Julián, que lo encontró (en E.164)" "Julián +5491157698999" "$(jmap 'const c = r.find((x) => x.id === 2).contacto; c.nombre + " " + c.telefono')"
 v "los perdidos de otras familias no traen contacto" sí "$(jok '!r.some((x) => x.estado === "perdido" && "contacto" in x)')"
 como "$LUCIA"
 t "reportes activos (Lucía, sin encontrados propios)" 200 GET /api/reportes
 v "ninguno trae contacto" sí "$(jok '!r.some((x) => "contacto" in x)')"
-como "$VALENTINA"
-t "reportes activos (Valentina, que encontró a Milo)" 200 GET /api/reportes
-v "su encontrado de Milo trae el contacto de la familia" Sofía "$(jmap 'r.find((x) => x.id === 4).contacto.nombre')"
-v "ningún otro trae contacto" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
+como "$JULIAN"
+t "reportes activos (Julián, que encontró a Milo)" 200 GET /api/reportes
+v "su encontrado de Milo trae el contacto de la familia" Sofía "$(jmap 'r.find((x) => x.id === 2).contacto.nombre')"
+v "ningún otro trae contacto" 2 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
 como "$MARTIN"
 t "reportes activos (Martín, que encontró a Rocky)" 200 GET /api/reportes
-v "su encontrado de Rocky trae a Marcos, que publicó el perdido" Marcos "$(jmap 'r.find((x) => x.id === 10).contacto.nombre')"
-v "el perdido de Rocky no trae contacto" sí "$(jok '!("contacto" in r.find((x) => x.id === 7))')"
+v "su encontrado de Rocky trae a Marcos, que publicó el perdido" Marcos "$(jmap "r.find((x) => x.id === $E_ROCKY).contacto.nombre")"
+v "el perdido de Rocky no trae contacto" sí "$(jok "!(\"contacto\" in r.find((x) => x.id === $P_ROCKY))")"
 como "$SOFIA"
 t "cuidadores de las mascotas asignadas" 200 GET /api/cuidadores
 v "con nombre armado desde el usuario" sí "$(jok 'r.some((c) => c.nombre === "Sofía Romero")')"
@@ -662,18 +698,18 @@ t "nuevo perdido de Roco tras cerrar" 201 POST /api/reportes "{\"estado\":\"perd
 
 
 # Quién edita o cierra un reporte: el autor o alguien asignado a la mascota.
-R_CARLOS=$(reporte_de 11 1 perdido Luna)   # Carlos, co-dueño de Luna
+R_CARLOS=$(reporte_de "$CARLOS_ID" 1 perdido Luna)   # Carlos, co-dueño de Luna
 R_TOBY=$(reporte_de 20 4 perdido Toby)     # Lucía, dueña de Toby
 t "perdido de Luna publicado por Carlos: lo edita la dueña" 200 PATCH /api/reportes/$R_CARLOS '{"zona":"Villa Crespo, CABA"}'
-v "el autor sigue siendo Carlos" 11 "$(jget .autorId)"
+v "el autor sigue siendo Carlos" "$CARLOS_ID" "$(jget .autorId)"
 t "perdido de Luna publicado por Carlos: lo cierra la dueña" 200 PATCH /api/reportes/$R_CARLOS '{"cerrado":true}'
 v "sin encontrado: Apareció" aparecio "$(jget .resultado)"
-R_QR=$(reporte_de 3 1 encontrado Luna)     # Valentina encontró a Luna por el QR
+R_QR=$(reporte_de "$VALENTINA_ID" 1 encontrado Luna)     # Valentina encontró a Luna por el QR
 t "encontrado de Luna (QR) sin perdido: lo cierra la dueña" 200 PATCH /api/reportes/$R_QR '{"cerrado":true}'
 v "No, está conmigo: Descartado" descartado "$(jget .resultado)"
-t "encontrado de Milo del seed: No, está conmigo" 200 PATCH /api/reportes/4 '{"cerrado":true}'
+t "encontrado de Milo del seed: No, está conmigo" 200 PATCH /api/reportes/2 '{"cerrado":true}'
 v "Descartado, con la fecha" "descartado sí" "$(jget .resultado) $(jok 'typeof r.cerradoEn === "string"')"
-ANONIMO=$(reporte_de 3 NULL encontrado Perro)   # un encontrado anónimo de antes (Valentina)
+ANONIMO=$(reporte_de "$VALENTINA_ID" NULL encontrado Perro)   # un encontrado anónimo de antes (Valentina)
 t "encontrado anónimo de antes, de otro autor: cerrar" 403 PATCH /api/reportes/$ANONIMO '{"cerrado":true}'
 t "encontrado anónimo de antes, de otro autor: editar" 403 PATCH /api/reportes/$ANONIMO '{"zona":"Palermo, CABA"}'
 t "perdido de Toby sin tenerlo asignado" 403 PATCH /api/reportes/$R_TOBY '{"zona":"Palermo, CABA"}'
@@ -831,11 +867,7 @@ t "Luna tiene otro dueño: se puede ir" 204 DELETE /api/mascotas/1/cuidadores/me
 t "body no JSON objeto" 400 PATCH /api/mascotas/3 '[1,2]'
 
 seccion "Quitar invitados"
-# Roco (2): Sofía dueña, Marcos invitado. Milo (3): Sofía y Sol dueñas. Luna (1): la veterinaria, invitada.
-id_de() { sql "select id from Usuario where email = '$1';"; }
-MARCOS_ID=$(id_de marcos.diaz@mail.com); SOL_ID=$(id_de sol.romero@mail.com); VET_ID=$(id_de contacto@vetsanroque.com)
-MARCOS=$(login marcos.diaz@mail.com) || abortar "no se pudo hacer login con Marcos."
-VET=$(login contacto@vetsanroque.com) || abortar "no se pudo hacer login con la veterinaria."
+# Roco (2): Sofía dueña, Julián y Marcos invitados. Milo (3): Sofía y Sol dueñas. Luna (1): la clínica, invitada.
 como "$MARCOS"
 t "un invitado no quita a la dueña" 403 DELETE /api/mascotas/2/cuidadores/1
 v "dice que solo un dueño puede" "Solo un dueño de Roco puede quitar a otras personas." "$(jget .error)"
@@ -856,7 +888,7 @@ t "Marcos ya no ve a Roco" 200 GET /api/mascotas
 v "Roco no está en su lista" sí "$(jok '!r.some((m) => m.id === 2)')"
 como "$VET"
 t "una invitada se va con su propio id (Luna)" 204 DELETE /api/mascotas/1/cuidadores/$VET_ID
-v "la veterinaria ya no está asignada a Luna" 0 "$(sql "select count(*) from Cuidador where mascotaId = 1 and usuarioId = $VET_ID;")"
+v "la clínica ya no está asignada a Luna" 0 "$(sql "select count(*) from Cuidador where mascotaId = 1 and usuarioId = $VET_ID;")"
 
 seccion "Borrar mascota"
 # Una mascota de Sofía con todo lo que puede tener: fotos, carnet, turno,
