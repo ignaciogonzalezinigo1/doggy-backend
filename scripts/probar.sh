@@ -374,7 +374,8 @@ v "fechas sin hora (AAAA-MM-DD)" sí "$(jok 'r.every((x) => /^\d{4}-\d{2}-\d{2}$
 t "turnos de las mascotas asignadas" 200 GET /api/turnos
 v "ninguno de Toby" sí "$(jok 'r.length > 0 && r.every((x) => x.mascotaId !== 4)')"
 t "reportes activos" 200 GET /api/reportes
-v "los 10 del seed, con etiquetas como lista" sí "$(jok 'r.length === 10 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "los 6 del seed, con etiquetas como lista" sí "$(jok 'r.length === 6 && r.every((x) => Array.isArray(x.etiquetas))')"
+v "todos son de una mascota registrada (no hay anónimos)" sí "$(jok 'r.every((x) => x.mascotaId !== null)')"
 v "Rocky: el perdido y el encontrado de Martín, los dos activos" "perdido,encontrado" "$(jmap 'r.filter((x) => x.mascotaId === 6).map((x) => x.estado).join()')"
 v "solo trae contacto el encontrado de Milo" 4 "$(jmap 'r.filter((x) => x.contacto).map((x) => x.id).join()')"
 v "es el de Valentina, que lo encontró (en E.164)" "Valentina +5491162749031" "$(jmap 'const c = r.find((x) => x.id === 4).contacto; c.nombre + " " + c.telefono')"
@@ -622,22 +623,26 @@ v "etiquetas como lista" "Collar azul,Asustadizo" "$(jget .etiquetas)"
 t "segundo perdido de la misma mascota" 409 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"nombre\":\"Roco\",\"raza\":\"Beagle\",\"descripcion\":\"Collar azul con chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
 v "mensaje del 409" "Esta mascota ya está reportada como perdida. No se puede reportar de nuevo." "$(jget .error)"
 t "perdido de mascota ajena" 403 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":4,\"nombre\":\"Toby\",\"raza\":\"Caniche\",\"descripcion\":\"Pelo blanco con rulos\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
-t "encontrado de mascota ajena sin QR ni perdido" 403 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":4,\"descripcion\":\"La vi en la plaza\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
-v "mensaje del 403" "Para avisarle a su familia, escaneá el QR de su chapita." "$(jget .error)"
-t "encontrado de mascota ajena (QR), que no está perdida" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\" doggy-7741-toby \",\"nombre\":\"Firulais\",\"raza\":\"Caniche\",\"descripcion\":\"La vi en la plaza, tiene collar rojo\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "encontrado sin código (con mascotaId)" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":4,\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+v "mensaje del 400" "Escaneá el QR de su chapita para avisar que la encontraste." "$(jget .error)"
+t "encontrado sin código ni mascota (anónimo)" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Mestizo\",\"descripcion\":\"Perro marrón chico\",\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "encontrado con código de mascota ajena, que no está perdida" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\" doggy-7741-toby \",\"nombre\":\"Firulais\",\"raza\":\"Caniche\",\"descripcion\":\"Otro texto\",\"foto\":\"milo\",\"etiquetas\":[\"Collar\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"infoAdicional\":\"La vi en la plaza, tiene collar rojo\"}"
 QR_PROPIO=$(jget .id)
-v "nombre y raza de la mascota, no los del body" "Toby · Beagle" "$(jmap 'r.nombre + " · " + r.raza')"
-v "la descripción es el comentario de quien la encontró" "La vi en la plaza, tiene collar rojo" "$(jget .descripcion)"
+v "nombre, raza, foto y señas salen de la mascota, no del body" "$(sql "select nombre || ' · ' || raza || ' · ' || foto || ' · ' || senas from Mascota where id = 4;")" "$(jmap 'r.nombre + " · " + r.raza + " · " + r.foto + " · " + r.descripcion')"
+v "sin etiquetas" "" "$(jget .etiquetas)"
+v "el comentario de quien la encontró va en infoAdicional" "La vi en la plaza, tiene collar rojo" "$(jget .infoAdicional)"
 v "queda vinculado a Toby" 4 "$(jget .mascotaId)"
-t "segundo encontrado de Toby del mismo usuario" 409 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-7741-TOBY\",\"descripcion\":\"Sigue en la plaza\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "encontrado repetido de Toby del mismo usuario" 409 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-7741-TOBY\",\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 v "mensaje del 409" "Ya avisaste que encontraste a esta mascota." "$(jget .error)"
-t "encontrado con mascota que no existe" 404 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":9999,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
-t "encontrado con radio" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
-t "etiquetas repetidas" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[\"Collar\",\"collar\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
-t "6 etiquetas" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[\"Uno\",\"Dos\",\"Tres\",\"Cuatro\",\"Cinco\",\"Seis\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
-t "latitud fuera de rango" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-134.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
-t "fecha futura" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$FUT_ISO\"}"
-t "foto con URI del celular" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":null,\"nombre\":\"Sin identificar\",\"raza\":\"Sin especificar\",\"descripcion\":\"Perro marrón chico\",\"foto\":\"file:///tmp/perro.jpg\",\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "perdido de una mascota que no existe" 404 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":9999,\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
+t "perdido sin mascota" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":null,\"nombre\":\"Sin nombre\",\"raza\":\"Mestizo\",\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
+t "encontrado con radio" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-5610-MILO\",\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
+t "encontrado con latitud fuera de rango" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-7741-TOBY\",\"lat\":-134.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "etiquetas repetidas" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"radioMetros\":500,\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[\"Collar\",\"collar\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "6 etiquetas" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"radioMetros\":500,\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[\"Uno\",\"Dos\",\"Tres\",\"Cuatro\",\"Cinco\",\"Seis\"],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "latitud fuera de rango" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"radioMetros\":500,\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-134.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+t "fecha futura" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"radioMetros\":500,\"descripcion\":\"Perro marrón chico\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$FUT_ISO\"}"
+t "foto con URI del celular" 400 POST /api/reportes "{\"estado\":\"perdido\",\"mascotaId\":2,\"radioMetros\":500,\"descripcion\":\"Perro marrón chico\",\"foto\":\"file:///tmp/perro.jpg\",\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 t "reemplaza etiquetas y radio, borra info" 200 PATCH /api/reportes/$REP '{"etiquetas":["Arnés rojo"],"radioMetros":1000,"infoAdicional":null,"estado":"encontrado"}'
 v "el estado no cambia" perdido "$(jget .estado)"
 v "etiquetas reemplazadas" "Arnés rojo" "$(jget .etiquetas)"
@@ -668,16 +673,20 @@ t "encontrado de Luna (QR) sin perdido: lo cierra la dueña" 200 PATCH /api/repo
 v "No, está conmigo: Descartado" descartado "$(jget .resultado)"
 t "encontrado de Milo del seed: No, está conmigo" 200 PATCH /api/reportes/4 '{"cerrado":true}'
 v "Descartado, con la fecha" "descartado sí" "$(jget .resultado) $(jok 'typeof r.cerradoEn === "string"')"
-t "encontrado sin mascota de otro autor: cerrar" 403 PATCH /api/reportes/2 '{"cerrado":true}'
-t "encontrado sin mascota de otro autor: editar" 403 PATCH /api/reportes/2 '{"zona":"Palermo, CABA"}'
+ANONIMO=$(reporte_de 3 NULL encontrado Perro)   # un encontrado anónimo de antes (Valentina)
+t "encontrado anónimo de antes, de otro autor: cerrar" 403 PATCH /api/reportes/$ANONIMO '{"cerrado":true}'
+t "encontrado anónimo de antes, de otro autor: editar" 403 PATCH /api/reportes/$ANONIMO '{"zona":"Palermo, CABA"}'
 t "perdido de Toby sin tenerlo asignado" 403 PATCH /api/reportes/$R_TOBY '{"zona":"Palermo, CABA"}'
-t "encontrado propio de mascota ajena: lo edita el autor" 200 PATCH /api/reportes/$QR_PROPIO '{"descripcion":"Pelo blanco con rulos, sin collar"}'
-t "encontrado de mascota registrada: el nombre no se edita" 400 PATCH /api/reportes/$QR_PROPIO '{"nombre":"Firulais"}'
+t "encontrado propio: el autor corrige el punto y el comentario" 200 PATCH /api/reportes/$QR_PROPIO '{"zona":"Villa Crespo, CABA","infoAdicional":"Sin collar"}'
+v "zona y comentario nuevos" "Villa Crespo, CABA · Sin collar" "$(jmap 'r.zona + " · " + r.infoAdicional')"
+t "encontrado: el nombre no se edita" 400 PATCH /api/reportes/$QR_PROPIO '{"nombre":"Firulais"}'
+t "encontrado: la foto no se edita" 400 PATCH /api/reportes/$QR_PROPIO '{"foto":null}'
+t "encontrado: la descripción no se edita" 400 PATCH /api/reportes/$QR_PROPIO '{"descripcion":"Otra cosa"}'
 
 seccion "Reportes: perdido hasta que la familia la recupera"
 # Un perdido de Luna (Sofía) y el encontrado de Lucía, que no está asignada a Luna.
 PERDIDO_LUNA="{\"estado\":\"perdido\",\"mascotaId\":1,\"descripcion\":\"Collar rojo con chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.58,\"lng\":-58.42,\"zona\":\"Palermo, CABA\",\"fecha\":\"$AHORA_ISO\",\"radioMetros\":500}"
-ENCONTRADO_LUNA="{\"estado\":\"encontrado\",\"mascotaId\":1,\"descripcion\":\"Estaba en la plaza con la chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.57,\"lng\":-58.43,\"zona\":\"Colegiales, CABA\",\"fecha\":\"$AHORA_ISO\"}"
+ENCONTRADO_LUNA="{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-8492-LUNA\",\"infoAdicional\":\"Estaba en la plaza con la chapita\",\"lat\":-34.57,\"lng\":-58.43,\"zona\":\"Colegiales, CABA\",\"fecha\":\"$AHORA_ISO\"}"
 # Estado de un reporte en la base: "<resultado>|<1 si está cerrado>".
 cierre_de() { sql "select resultado, cerradoEn is not null from ReportePerdida where id = $1;"; }
 como "$SOFIA"
@@ -718,9 +727,9 @@ v "guardado en la base" "aparecio|1" "$(cierre_de "$P_LUNA")"
 
 seccion "Reportes: encontrados vinculados y reencuentros"
 # Lucía no está asignada a Luna; Sofía y Carlos son sus dueños. Luna no tiene reportes activos.
-CUERPO_HALLAZGO="\"descripcion\":\"Está conmigo, tiene la chapita\",\"foto\":null,\"etiquetas\":[],\"lat\":-34.57,\"lng\":-58.43,\"zona\":\"Colegiales, CABA\",\"fecha\":\"$AHORA_ISO\""
+CUERPO_HALLAZGO="\"infoAdicional\":\"Está conmigo, tiene la chapita\",\"lat\":-34.57,\"lng\":-58.43,\"zona\":\"Colegiales, CABA\",\"fecha\":\"$AHORA_ISO\""
 como "$LUCIA"
-t "encontrado de Luna sin QR ni perdido" 403 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
+t "encontrado de Luna sin código" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
 t "código con otro formato" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"hola\",$CUERPO_HALLAZGO}"
 t "código que no es de nadie" 404 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-0000-NADIE\",$CUERPO_HALLAZGO}"
 t "código de otra mascota que el mascotaId" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":2,\"codigo\":\"DOGGY-8492-LUNA\",$CUERPO_HALLAZGO}"
@@ -739,7 +748,7 @@ v "el encontrado trae el contacto de Lucía" Lucía "$(jmap "r.find((x) => x.id 
 como "$VALENTINA"
 t "reportes activos (Valentina, ajena a Luna)" 200 GET /api/reportes
 v "el encontrado de Lucía no trae contacto" sí "$(jok "!(\"contacto\" in r.find((x) => x.id === $E_DUDA))")"
-t "Valentina no se vincula sin QR (Luna no está perdida)" 403 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
+t "Valentina no se vincula sin código" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
 
 # Sí, se perdió: crea el perdido con el lugar y la hora del encontrado.
 como "$LUCIA"
@@ -747,7 +756,7 @@ t "Sí, se perdió: quien la encontró" 403 POST /api/reportes/$E_DUDA/perdida
 como "$SOFIA"
 t "Sí, se perdió: id inválido" 400 POST /api/reportes/abc/perdida
 t "Sí, se perdió: no existe" 404 POST /api/reportes/9999/perdida
-t "Sí, se perdió: encontrado anónimo" 403 POST /api/reportes/2/perdida
+t "Sí, se perdió: encontrado anónimo de antes" 403 POST /api/reportes/$ANONIMO/perdida
 t "Sí, se perdió" 201 POST /api/reportes/$E_DUDA/perdida
 P_REENC=$(jget .id)
 v "es un perdido de Luna, de Sofía" "perdido 1 1" "$(jget .estado) $(jget .mascotaId) $(jget .autorId)"
@@ -757,9 +766,10 @@ t "Sí, se perdió otra vez" 409 POST /api/reportes/$E_DUDA/perdida
 t "Sí, se perdió sobre un perdido" 409 POST /api/reportes/$P_REENC/perdida
 t "otro perdido de Luna" 409 POST /api/reportes "$PERDIDO_LUNA"
 
-# Encontré a Luna desde el mapa: con el perdido activo alcanza el mascotaId.
+# Desde el mapa ya no se puede avisar: hace falta el código aunque Luna esté perdida.
 como "$VALENTINA"
-t "Encontré a Luna desde el perdido (otra persona)" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
+t "encontrado de una mascota perdida sin código" 400 POST /api/reportes "{\"estado\":\"encontrado\",\"mascotaId\":1,$CUERPO_HALLAZGO}"
+t "otra persona escanea el QR de Luna perdida" 201 POST /api/reportes "{\"estado\":\"encontrado\",\"codigo\":\"DOGGY-8492-LUNA\",$CUERPO_HALLAZGO}"
 E_MAPA=$(jget .id)
 t "reportes activos (Valentina)" 200 GET /api/reportes
 v "su encontrado trae a Sofía, que publicó el perdido" Sofía "$(jmap "r.find((x) => x.id === $E_MAPA).contacto.nombre")"

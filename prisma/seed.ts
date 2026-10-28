@@ -19,7 +19,9 @@
  * ninguna de esas cuatro mascotas está reportada como perdida. Rocky (6), de
  * Marcos, está perdido y con un encontrado de Martín todavía sin recuperar
  * (reencuentro), y Milo tiene un encontrado de Valentina por QR sin estar
- * perdido (caso dudoso).
+ * perdido (caso dudoso). Simba (7, de Martín), Nieve (8, de Sol) y Pipa (5)
+ * están perdidos sin encontrar. No hay encontrados anónimos: todo encontrado
+ * se publica escaneando la chapita.
  */
 
 import bcrypt from 'bcryptjs';
@@ -39,7 +41,7 @@ const SOFIA_ID = 1;
 const MARTIN_ID = 2;
 /** Encontró a Milo escaneando su chapita. */
 const VALENTINA_ID = 3;
-/** Tutor de Pipa, la mascota perdida con QR (para la demo de WhatsApp). */
+/** Tutor de Pipa, perdida sin encontrar (para escanear su QR con otra cuenta). */
 const JULIAN_ID = 4;
 const CARLOS_ID = 11;
 /** La clínica: teléfono fijo, sin WhatsApp. */
@@ -233,7 +235,7 @@ const mascotas = [
     senas: 'Tricolor, con la punta de la cola blanca.',
     foto: 'toby',
   },
-  // Perdida y con QR: quien la escanea ve el celular de Julián y "Avisar por WhatsApp".
+  // Perdida sin encontrar: para probar el QR con otra cuenta.
   {
     id: 5,
     tutorId: JULIAN_ID,
@@ -254,6 +256,28 @@ const mascotas = [
     codigo: 'DOGGY-1953-ROCKY',
     senas: 'Boxer atigrado con el pecho blanco. Collar de cuero marrón.',
     foto: 'rocky',
+  },
+  // Perdido sin encontrar, en Palermo.
+  {
+    id: 7,
+    tutorId: MARTIN_ID,
+    nombre: 'Simba',
+    raza: 'Golden Retriever',
+    fechaNacimiento: dia('2024-02-10'),
+    codigo: 'DOGGY-6237-SIMBA',
+    senas: 'Golden de pelo claro, muy amigable. Collar azul con chapita.',
+    foto: 'simba',
+  },
+  // Perdida sin encontrar, en Villa Urquiza.
+  {
+    id: 8,
+    tutorId: SOL_ID,
+    nombre: 'Nieve',
+    raza: 'Spitz',
+    fechaNacimiento: dia('2022-07-30'),
+    codigo: 'DOGGY-4815-NIEVE',
+    senas: 'Blanca de pelo largo, chiquita. Se asusta con los ruidos fuertes.',
+    foto: 'nieve',
   },
 ];
 
@@ -293,18 +317,20 @@ const turnos = [
 ];
 
 /**
- * Reportes con sus etiquetas, repartidos por barrios. Perdidos y
- * encontrados, con y sin mascota registrada.
+ * Reportes con sus etiquetas, repartidos por barrios. Todos son de mascotas
+ * registradas, con los datos de la mascota (nombre, raza, foto y señas): los
+ * perdidos los publica su familia y los encontrados, quien escaneó la chapita
+ * (con su comentario en `infoAdicional`).
  */
 const reportes = [
   {
     id: 1,
-    mascotaId: null,
+    mascotaId: 7,
     autorId: MARTIN_ID,
     estado: 'perdido',
     nombre: 'Simba',
     raza: 'Golden Retriever',
-    descripcion: 'Golden de 2 años, collar azul sin chapita. Muy amigable, responde a su nombre.',
+    descripcion: 'Golden de pelo claro, muy amigable. Collar azul con chapita.',
     foto: 'simba',
     etiquetas: ['Collar azul'],
     lat: -34.5887,
@@ -315,28 +341,13 @@ const reportes = [
     infoAdicional: 'Se escapó cerca de Plaza Armenia. Tenía puesto un pretal rojo. Se asusta con las motos.',
   },
   {
-    id: 2,
-    mascotaId: null,
-    autorId: VALENTINA_ID,
-    estado: 'encontrado',
-    nombre: 'Sin collar',
-    raza: 'Mestizo',
-    descripcion: 'Lo encontramos cerca de las Barrancas de Belgrano. Está en tránsito con nosotros.',
-    foto: 'sin-collar',
-    etiquetas: ['En tránsito'],
-    lat: -34.5627,
-    lng: -58.4583,
-    zona: 'Belgrano, CABA',
-    fecha: haceHoras(26),
-  },
-  {
     id: 3,
-    mascotaId: null,
+    mascotaId: 8,
     autorId: SOL_ID,
     estado: 'perdido',
     nombre: 'Nieve',
     raza: 'Spitz',
-    descripcion: 'Perrita blanca de pelo largo. Se asustó con la pirotecnia y salió corriendo.',
+    descripcion: 'Blanca de pelo largo, chiquita. Se asusta con los ruidos fuertes.',
     foto: 'nieve',
     etiquetas: ['Asustadiza', 'Pelo largo'],
     lat: -34.5786,
@@ -344,6 +355,7 @@ const reportes = [
     zona: 'Villa Urquiza, CABA',
     fecha: haceHoras(22),
     radioMetros: 500,
+    infoAdicional: 'Se asustó con la pirotecnia y salió corriendo.',
   },
   // Valentina escaneó la chapita de Milo, que no estaba perdido: Sofía ve "¿Se perdió Milo?" con el contacto de Valentina.
   {
@@ -353,15 +365,16 @@ const reportes = [
     estado: 'encontrado',
     nombre: 'Milo',
     raza: 'Mestizo',
-    descripcion: 'Estaba solo en la plaza, con la chapita puesta. Lo tenemos en casa.',
+    descripcion: 'Marrón con el pecho y las patas blancas. Orejas caídas.',
     foto: 'milo',
     etiquetas: [],
     lat: -34.5614,
     lng: -58.4565,
     zona: 'Belgrano, CABA',
     fecha: haceHoras(1),
+    infoAdicional: 'Estaba solo en la plaza, con la chapita puesta. Lo tenemos en casa.',
   },
-  // Perdida con QR: quien escanee su chapita ve el celular de Julián y puede avisar por WhatsApp.
+  // Perdida sin encontrar: quien escanee su chapita y avise pasa a reencuentro.
   {
     id: 5,
     mascotaId: 5,
@@ -378,21 +391,6 @@ const reportes = [
     fecha: haceHoras(5),
     radioMetros: 1000,
     infoAdicional: 'Se soltó de la correa en Parque Centenario. Es tímida: mejor no correrla.',
-  },
-  {
-    id: 6,
-    mascotaId: null,
-    autorId: LUCIA_ID,
-    estado: 'encontrado',
-    nombre: 'Sin identificar',
-    raza: 'Caniche toy',
-    descripcion: 'Caniche color damasco, muy cariñoso. Andaba solo por Medrano y Corrientes. Lo tengo en casa.',
-    foto: 'caniche',
-    etiquetas: ['En tránsito'],
-    lat: -34.6036,
-    lng: -58.4209,
-    zona: 'Almagro, CABA',
-    fecha: haceHoras(8),
   },
   // Rocky sigue perdido aunque Martín lo encontró (reporte 10): espera que Marcos lo recupere.
   {
@@ -411,36 +409,6 @@ const reportes = [
     fecha: haceHoras(30),
     radioMetros: 2000,
   },
-  {
-    id: 8,
-    mascotaId: null,
-    autorId: CARLOS_ID,
-    estado: 'encontrado',
-    nombre: 'Sin identificar',
-    raza: 'Labrador',
-    descripcion: 'Labrador negro, adulto y muy tranquilo. Collar sin chapita. Lo dejé en un patio cerca de la plaza.',
-    foto: 'labrador',
-    etiquetas: [],
-    lat: -34.5735,
-    lng: -58.487,
-    zona: 'Villa Urquiza, CABA',
-    fecha: haceHoras(4),
-  },
-  {
-    id: 9,
-    mascotaId: null,
-    autorId: VETERINARIA_ID,
-    estado: 'encontrado',
-    nombre: 'Sin identificar',
-    raza: 'Salchicha',
-    descripcion: 'Lo trajo un vecino a la veterinaria. Negro y fuego, collar rojo sin chapita. Está bien de salud.',
-    foto: 'salchicha',
-    etiquetas: ['En la veterinaria'],
-    lat: -34.5876,
-    lng: -58.4209,
-    zona: 'Palermo, CABA',
-    fecha: haceHoras(12),
-  },
   // Martín escaneó la chapita de Rocky: con el perdido es un reencuentro, un solo pin donde lo encontró.
   {
     id: 10,
@@ -449,13 +417,14 @@ const reportes = [
     estado: 'encontrado',
     nombre: 'Rocky',
     raza: 'Boxer',
-    descripcion: 'Estaba atado en la puerta de un kiosco, con la chapita puesta. Lo tenemos en casa.',
+    descripcion: 'Boxer atigrado con el pecho blanco. Collar de cuero marrón.',
     foto: 'rocky',
-    etiquetas: ['Chapita Doggy'],
+    etiquetas: [],
     lat: -34.5531,
     lng: -58.4802,
     zona: 'Saavedra, CABA',
     fecha: haceHoras(3),
+    infoAdicional: 'Estaba atado en la puerta de un kiosco, con la chapita puesta. Lo tenemos en casa.',
   },
 ];
 
@@ -478,6 +447,8 @@ const cuidadores = [
   { id: 8, mascotaId: 4, usuarioId: LUCIA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
   { id: 9, mascotaId: 5, usuarioId: JULIAN_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
   { id: 10, mascotaId: 6, usuarioId: MARCOS_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
+  { id: 11, mascotaId: 7, usuarioId: MARTIN_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
+  { id: 12, mascotaId: 8, usuarioId: SOL_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
 ];
 
 /**
@@ -504,7 +475,7 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
     email: 'lucia.gomez@mail.com',
     quien: 'Lucía, tutora de Toby',
-    mostrar: 'En Perdidos, "Encontré a Pipa" desde su detalle: después de publicar, WhatsApp a Julián. Escanear el QR de Luna y avisar: Sofía ve "¿Se perdió Luna?".',
+    mostrar: 'Encontré una mascota → escanear el QR de Pipa (perdida): al publicar es un reencuentro y aparece WhatsApp a Julián. El de Luna (no perdida): Sofía ve "¿Se perdió Luna?".',
   },
   {
     email: 'julian.fernandez@mail.com',
@@ -513,18 +484,18 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   },
   {
     email: 'valentina.perez@mail.com',
-    quien: 'Valentina, encontró a Milo y a un mestizo en Belgrano',
-    mostrar: 'Su encontrado de Milo en Perdidos, con el contacto de Sofía.',
+    quien: 'Valentina, encontró a Milo escaneando su chapita',
+    mostrar: 'Su encontrado de Milo en Perdidos, con WhatsApp a Sofía.',
   },
   {
     email: 'contacto@vetsanroque.com',
     quien: 'Vet. San Roque, clínica invitada en Luna',
-    mostrar: 'Teléfono fijo: sin WhatsApp. Publicó la salchicha encontrada en Palermo.',
+    mostrar: 'Teléfono fijo: si encuentra una mascota, la familia no le puede escribir por WhatsApp.',
   },
   {
     email: 'carlos.romero@mail.com',
     quien: 'Carlos, co-tutor de Luna',
-    mostrar: 'Ve a Luna y su carnet; publicó el labrador encontrado en Villa Urquiza.',
+    mostrar: 'Ve a Luna y su carnet.',
   },
   {
     email: 'marcos.diaz@mail.com',
@@ -534,7 +505,7 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
     email: 'martin.lopez@mail.com / sol.romero@mail.com',
     quien: 'Martín y Sol',
-    mostrar: 'Perdidos sin chapita: Simba (Palermo) y Nieve (Villa Urquiza). Martín publicó el encontrado de Rocky y ve el contacto de Marcos.',
+    mostrar: 'Perdidos sin encontrar: Simba, de Martín (Palermo), y Nieve, de Sol (Villa Urquiza). Martín publicó el encontrado de Rocky y ve el WhatsApp de Marcos.',
   },
 ];
 
