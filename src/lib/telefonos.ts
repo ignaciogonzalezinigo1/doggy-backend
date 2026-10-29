@@ -14,12 +14,13 @@
  * - Se escribe la característica y el número en cualquier formato habitual:
  *   con o sin 0, con o sin 15, con o sin 9, con espacios o guiones. Si viene
  *   el código de país adelante (+54, 54, 0054, 549), se saca.
- * - Por defecto es CELULAR: "2994554060", "299 455-4060", "0299 15 455-4060",
+ * - Todo número se guarda como CELULAR, porque asumimos que quien usa la app
+ *   tiene WhatsApp: "2994554060", "299 455-4060", "0299 15 455-4060",
  *   "+54 299 455 4060" y "54 9 299 455-4060" dan +5492994554060. Sin el 9 ni
  *   el 15, libphonenumber lo toma como fijo; acá se pasa a la versión celular.
- *   Con "Es un teléfono fijo" marcado se guarda sin el 9.
+ *   Un número que no tiene versión celular (0800, 0810, 0600) no es válido.
  * - Se guarda en E.164 y se muestra siempre con `formatearTelefono`
- *   ("+54 9 299 455-4060", "+54 11 4777-3020").
+ *   ("+54 9 299 455-4060", "+54 9 11 4589-2310").
  *
  * Se usa la metadata completa (`/max`) para validar el número de verdad y no
  * solo su largo.
@@ -94,12 +95,12 @@ export function sacarCodigoPais(texto: string): string | null {
 
 /**
  * Lee un teléfono escrito en cualquier formato habitual y lo pasa a E.164,
- * con la regla argentina: celular por defecto, fijo solo si se marcó.
+ * siempre como celular (con el 9).
  * @param texto teléfono como lo escribió el usuario
- * @param fijo true si el usuario marcó "Es un teléfono fijo"
- * @returns el E.164, o el error si es de otro país o no es un número válido
+ * @returns el E.164, o el error si es de otro país, no es un número válido o
+ *   no tiene versión celular
  */
-export function interpretarTelefono(texto: string, fijo = false): LecturaTelefono {
+export function interpretarTelefono(texto: string): LecturaTelefono {
   const nacional = sacarCodigoPais(texto);
   const numero =
     nacional !== null
@@ -110,26 +111,26 @@ export function interpretarTelefono(texto: string, fijo = false): LecturaTelefon
   }
   if (!numero?.isValid()) return { ok: false, error: MENSAJE_TELEFONO_INVALIDO };
   const base = sinPrefijoCelular(numero.nationalNumber);
-  const pedido = siEsValido(`+${CODIGO_ARGENTINA}${fijo ? '' : PREFIJO_CELULAR}${base}`);
-  // Si la versión pedida no existe (pasa con pocas numeraciones), queda la que sí.
-  return { ok: true, e164: (pedido ?? numero).number };
+  const celular = siEsValido(`+${CODIGO_ARGENTINA}${PREFIJO_CELULAR}${base}`);
+  // Los números especiales (0800, 0810, 0600) no tienen versión celular: no son de una persona.
+  if (!celular) return { ok: false, error: MENSAJE_TELEFONO_INVALIDO };
+  return { ok: true, e164: celular.number };
 }
 
 /**
- * Teléfono en E.164, o null si no es un número argentino válido.
+ * Teléfono en E.164 (celular), o null si no es un número argentino válido.
  * @param texto teléfono como lo escribió el usuario (o ya en E.164)
- * @param fijo true si el usuario marcó "Es un teléfono fijo"
  * @returns el número en E.164 ("+5492994554060") o null
  */
-export function aE164(texto: string, fijo = false): string | null {
-  const leido = interpretarTelefono(texto, fijo);
+export function aE164(texto: string): string | null {
+  const leido = interpretarTelefono(texto);
   return leido.ok ? leido.e164 : null;
 }
 
 /**
  * Teléfono para mostrar, el mismo formato en toda la app: internacional con
- * el último grupo unido por un guion ("+54 9 299 455-4060", "+54 9 11 4589-2310",
- * "+54 11 4777-3020"). Si no se puede interpretar, queda como está.
+ * el último grupo unido por un guion ("+54 9 299 455-4060", "+54 9 11 4589-2310").
+ * Si no se puede interpretar, queda como está.
  * @param telefono teléfono guardado (en E.164)
  * @returns el teléfono listo para mostrar
  */
@@ -167,17 +168,3 @@ export function quitarCodigoPais(texto: string): string | null {
   return e164 ? telefonoParaEditar(e164) : nacional;
 }
 
-/**
- * Indica si un teléfono es un celular (para ofrecer WhatsApp). Usa el tipo
- * de número de libphonenumber-js: MOBILE, o FIXED_LINE_OR_MOBILE cuando el
- * plan del país no permite distinguirlos. En la Argentina, un celular lleva
- * el 9 (internacional) o el 15 (local).
- * @param telefono teléfono guardado (en E.164)
- * @returns true si se le puede escribir por WhatsApp
- */
-export function esCelular(telefono: string): boolean {
-  const numero = parsePhoneNumberFromString(telefono.trim(), REGION_TELEFONO);
-  if (!numero?.isValid()) return false;
-  const tipo = numero.getType();
-  return tipo === 'MOBILE' || tipo === 'FIXED_LINE_OR_MOBILE';
-}
