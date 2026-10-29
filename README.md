@@ -58,7 +58,7 @@ carpeta-de-trabajo/
 
 ### Usuarios de prueba
 
-El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de esos datos, porque la app no tiene datos propios. Las fotos usan las claves de las imágenes empaquetadas en la app (`luna`, `sofia`, …). **Todos los usuarios tienen la contraseña `doggy1234`.**
+El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de esos datos, porque la app no tiene datos propios. Las fotos de la demo están versionadas en `prisma/fotos-seed/`: el seed las copia a `uploads/` como `seed-<clave>.jpg` y guarda la ruta `/uploads/seed-<clave>.jpg`, así salen del servidor como cualquier foto subida. **Todos los usuarios tienen la contraseña `doggy1234`.**
 
 | Usuario | Email | Para qué sirve |
 | --- | --- | --- |
@@ -75,7 +75,7 @@ El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de es
 | Valentina Ruiz | `valentina.ruiz@mail.com` | Sin mascotas (estados vacíos); encontró a Bruno: pin verde de reencuentro y WhatsApp a Martina |
 | Tomás Acosta | `tomas.acosta@mail.com` | Cuenta vacía para aceptar `LUNA2026` (rol dueño). `MILO2025` ya está usado (410) |
 
-Además: 5 mascotas (Luna, Roco y Milo de Sofía; Toby de Lucía; Pipa de Julián), 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, 6 asignaciones (cada dueño y Julián como paseador de Roco), el código `TOBY2026` sin usar y 2 reportes: el perdido de Pipa y el encontrado de Milo por QR (el caso "¿Se perdió…?"). El reencuentro no viene cargado: se muestra en vivo (Sofía reporta a Luna y Lucía escanea su QR). Todos los usuarios y mascotas tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
+Además: 5 mascotas (Luna, Roco y Milo de Sofía; Toby de Lucía; Pipa de Julián), 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, 6 asignaciones (cada dueño y Julián como paseador de Roco), el código `TOBY2026` sin usar y 2 reportes: el perdido de Pipa y el encontrado de Milo por QR (el caso "¿Se perdió…?"). El reencuentro no viene cargado: se muestra en vivo (Sofía reporta a Luna y Lucía escanea su QR). Todos los usuarios y mascotas tienen foto (créditos en [CREDITOS.md](CREDITOS.md)). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
 
 **Teléfono de Sofía para la demo.** Para que "Escribirle por WhatsApp" abra un celular real, poné el número en el `.env` (no se versiona) antes del `npm run db:reset`:
 
@@ -228,7 +228,8 @@ Las fotos se suben aparte: la app primero hace `POST /api/fotos` y después mand
 
 - El archivo se guarda en `uploads/` con un nombre aleatorio (32 caracteres hex) y se sirve público en `/uploads/<nombre>`, así el componente `Image` de la app lo carga sin header. La carpeta está ignorada en git (se versiona solo el `.gitkeep`).
 - En la base se guarda la ruta relativa (`/uploads/abc.jpg`), nunca la URL completa: la IP de la PC cambia, y la app arma la URL con su `API_URL`.
-- Los campos de foto solo aceptan `null`, una clave de las fotos del seed (`luna`, `roco`, `milo`, `simba`, `sin-collar`, `sofia`, `carlos`) o una ruta `/uploads/` cuyo archivo exista. Una URI del celular (`file://`, `content://`, `blob:`) da 400.
+- Los campos de foto solo aceptan `null` o una ruta `/uploads/` cuyo archivo exista. Una URI del celular (`file://`, `content://`, `blob:`) da 400.
+- Las fotos de la demo también están en `uploads/`: se versionan en `prisma/fotos-seed/` (porque `uploads/` no se versiona) y el seed las copia antes de cargar los datos como `seed-<clave>.jpg`. El nombre es fijo para que correr `db:reset` muchas veces no acumule copias: cada seed pisa la anterior y vuelve a crear la que se haya borrado al reemplazar esa foto. Son las únicas fotos con un nombre que se puede adivinar, y no importa: son fotos de Unsplash de la demo.
 - Cuando una foto se reemplaza o se borra (también al borrar un registro o cuando deja de ser vacuna), se borra su archivo si ningún otro registro lo usa. Cerrar un reporte no borra su foto: queda como historial.
 
 ### Probar a mano
@@ -319,7 +320,8 @@ Algunos casos se preparan insertando filas directo en la base con el helper `sql
 doggy-backend/
 ├── prisma/
 │   ├── schema.prisma     modelo de datos
-│   └── seed.ts           datos de ejemplo
+│   ├── seed.ts           datos de ejemplo
+│   └── fotos-seed/       fotos de la demo (el seed las copia a uploads/)
 ├── prisma.config.ts      configuración de la CLI de Prisma 7 (URL de la base, seed)
 ├── uploads/              fotos subidas (no se versionan, salvo el .gitkeep)
 ├── scripts/
