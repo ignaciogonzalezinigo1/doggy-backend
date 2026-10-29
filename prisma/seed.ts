@@ -46,7 +46,7 @@
  *   tiene refuerzos próximos y vencidos. Las fechas de nacimiento son fijas.
  *
  * Las pruebas (`npm test`) parten de estos datos y suman por su cuenta los
- * actores que necesitan (co-dueños, invitados, una clínica con fijo y otro
+ * actores que necesitan (co-dueños, invitados, una clínica y otro
  * reencuentro): ver "Actores extra" en scripts/probar.sh.
  */
 

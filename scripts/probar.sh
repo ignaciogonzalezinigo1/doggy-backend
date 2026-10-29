@@ -182,11 +182,9 @@ login() {
 
 # Registra un usuario por la API (contraseña del seed) y devuelve su token. Corta las pruebas si falla.
 # El body va desde un archivo, como en `t`, para que no se rompan las tildes en Windows.
-# Uso: TOKEN_X=$(registrar <nombre> <apellido> <email> <telefono> [fijo])
+# Uso: TOKEN_X=$(registrar <nombre> <apellido> <email> <telefono>)
 registrar() {
-  local fijo=false
-  [ "${5:-}" = fijo ] && fijo=true
-  printf '%s' "{\"nombre\":\"$1\",\"apellido\":\"$2\",\"email\":\"$3\",\"telefonoEmergencia\":\"$4\",\"telefonoFijo\":$fijo,\"password\":\"$PASSWORD_SEED\"}" > "$TMP/registro"
+  printf '%s' "{\"nombre\":\"$1\",\"apellido\":\"$2\",\"email\":\"$3\",\"telefonoEmergencia\":\"$4\",\"password\":\"$PASSWORD_SEED\"}" > "$TMP/registro"
   curl -s -X POST -H 'Content-Type: application/json' --data-binary "@$TMP/registro" "$API/api/auth/registro" |
     node -e 'let d = ""; process.stdin.on("data", (c) => (d += c)).on("end", () => { const t = JSON.parse(d).token; if (!t) process.exit(1); console.log(t); })'
 }
@@ -252,7 +250,7 @@ JULIAN=$(login julian.fernandez@mail.com) || abortar "no se pudo hacer login con
 
 # Actores extra: el seed es la demo mínima y las pruebas necesitan más gente.
 # Se registran por la API y se asignan con SQL:
-# - Carlos, co-dueño de Luna; la Clínica San Roque (teléfono fijo), invitada en Luna;
+# - Carlos, co-dueño de Luna; la Clínica San Roque, invitada en Luna;
 # - Marcos, invitado de Roco y dueño de Rocky (perdido); Sol, co-dueña de Milo;
 # - Valentina y Martín, que no tienen mascotas y encuentran perros (Martín encuentra a Rocky).
 CARLOS=$(registrar Carlos Romero carlos.romero@mail.com "11 6120-4455") || abortar "no se pudo registrar a Carlos."
@@ -260,7 +258,7 @@ VALENTINA=$(registrar Valentina Pérez valentina.perez@mail.com "11 6274-9031") 
 MARTIN=$(registrar Martín López martin.lopez@mail.com "11 5320-1187") || abortar "no se pudo registrar a Martín."
 MARCOS=$(registrar Marcos Díaz marcos.diaz@mail.com "11 5874-2216") || abortar "no se pudo registrar a Marcos."
 SOL=$(registrar Sol Romero sol.romero@mail.com "11 6041-3378") || abortar "no se pudo registrar a Sol."
-VET=$(registrar Clínica "San Roque" contacto@vetsanroque.com "11 4777-3020" fijo) || abortar "no se pudo registrar a la clínica."
+VET=$(registrar Clínica "San Roque" contacto@vetsanroque.com "11 4777-3020") || abortar "no se pudo registrar a la clínica."
 CARLOS_ID=$(id_de carlos.romero@mail.com); MARCOS_ID=$(id_de marcos.diaz@mail.com); VALENTINA_ID=$(id_de valentina.perez@mail.com)
 SOL_ID=$(id_de sol.romero@mail.com); VET_ID=$(id_de contacto@vetsanroque.com)
 sql "insert into Cuidador (mascotaId, usuarioId, rol, detalle, tipo) values (1, $CARLOS_ID, 'dueno', 'Co-tutor', 'familia'), (1, $VET_ID, 'invitado', 'Dra. Martínez', 'clinica'), (2, $MARCOS_ID, 'invitado', 'Paseos', 'paseador'), (3, $SOL_ID, 'dueno', 'Hogar secundario', 'familia');"
@@ -283,8 +281,8 @@ v "no devuelve passwordHash" sí "$(jok '!("passwordHash" in r.usuario)')"
 v "id nuevo (no el del body)" sí "$(jok 'r.usuario.id > 20')"
 v "la contraseña se guarda hasheada" 1 "$(sql "select passwordHash like '\$2%' from Usuario where id = $NUEVO_ID;")"
 v "el teléfono se guarda en E.164" +5491145892310 "$(jget .usuario.telefonoEmergencia)"
-t "registro con teléfono fijo marcado" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Fijo","email":"ana.fijo@mail.com","telefonoEmergencia":"011 4777-3020","telefonoFijo":true,"password":"perro1234"}'
-v "se guarda como fijo" +541147773020 "$(jget .usuario.telefonoEmergencia)"
+t "registro con un número escrito como fijo" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Fijo","email":"ana.fijo@mail.com","telefonoEmergencia":"011 4777-3020","telefonoFijo":true,"password":"perro1234"}'
+v "se guarda como celular (telefonoFijo se ignora)" +5491147773020 "$(jget .usuario.telefonoEmergencia)"
 t "registro con celular sin 15" 201 POST /api/auth/registro '{"nombre":"Ana","apellido":"Celular","email":"ana.celu@mail.com","telefonoEmergencia":"2994554060","password":"perro1234"}'
 v "se guarda como celular" +5492994554060 "$(jget .usuario.telefonoEmergencia)"
 t "registro sin teléfono" 400 POST /api/auth/registro '{"nombre":"Ana","apellido":"Ruiz","email":"ana3@mail.com","password":"perro1234"}'
@@ -497,18 +495,27 @@ t "característica de 4 dígitos (3543 41-2345)" 200 PATCH /api/usuarios/me '{"t
 v "se guarda como celular" +5493543412345 "$(jget .telefonoEmergencia)"
 t "característica 2944 (2944 41-2345)" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2944 41-2345"}'
 v "se guarda como celular" +5492944412345 "$(jget .telefonoEmergencia)"
-t "fijo marcado (011) 4777-3020" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020","telefonoFijo":true}'
-v "se guarda como fijo, sin el 9" +541147773020 "$(jget .telefonoEmergencia)"
-t "fijo marcado escrito con el 15" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"0299 15 455-4060","telefonoFijo":true}'
-v "se guarda como fijo, sin el 9" +542994554060 "$(jget .telefonoEmergencia)"
-t "telefonoFijo que no es booleano" 400 PATCH /api/usuarios/me '{"telefonoEmergencia":"2994554060","telefonoFijo":"sí"}'
-t "fijo marcado con +54 adelante" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"+54 11 4777-3020","telefonoFijo":true}'
-v "se guarda como fijo, sin el 9" +541147773020 "$(jget .telefonoEmergencia)"
+t "escrito como fijo (011) 4777-3020" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"(011) 4777-3020"}'
+v "se guarda como celular, con el 9" +5491147773020 "$(jget .telefonoEmergencia)"
+t "telefonoFijo: true se ignora" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"0299 15 455-4060","telefonoFijo":true}'
+v "se guarda como celular, con el 9" +5492994554060 "$(jget .telefonoEmergencia)"
+t "telefonoFijo que no es booleano también se ignora" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"2994554060","telefonoFijo":"sí"}'
+v "no se devuelve telefonoFijo" sí "$(jok '!("telefonoFijo" in r)')"
+t "escrito como fijo con +54 adelante" 200 PATCH /api/usuarios/me '{"telefonoEmergencia":"+54 11 4777-3020"}'
+v "se guarda como celular, con el 9" +5491147773020 "$(jget .telefonoEmergencia)"
+for formato in "0800 333 7737" "0810 222 3456"; do
+  t "número sin versión celular \"$formato\"" 400 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
+  v "mensaje de número inválido" "Teléfono: no es un número válido. Escribilo con la característica, por ejemplo 11 4589-2310 o 299 455-4060." "$(jget .error)"
+done
 for formato in "+34 612 345 678" "+1 202 555 0143" "0034 612 345 678"; do
   t "número de otro país \"$formato\"" 400 PATCH /api/usuarios/me "{\"telefonoEmergencia\":\"$formato\"}"
   v "solo de Argentina" "Solo se aceptan teléfonos de Argentina." "$(jget .error)"
 done
-v "el teléfono guardado no cambió" +541147773020 "$(sql "select telefonoEmergencia from Usuario where id = 1;")"
+v "el teléfono guardado no cambió" +5491147773020 "$(sql "select telefonoEmergencia from Usuario where id = 1;")"
+# db:normalizar-telefonos sobre test.db (usa la DATABASE_URL exportada): un fijo viejo en E.164 pasa a celular.
+sql "update Usuario set telefonoEmergencia = '+541147773020' where id = $VET_ID;"
+node --import tsx scripts/normalizar-telefonos.ts > /dev/null
+v "normalizar pasa un fijo viejo a celular" +5491147773020 "$(sql "select telefonoEmergencia from Usuario where id = $VET_ID;")"
 t "body vacío" 400 PATCH /api/usuarios/me '{}'
 t "email de otra cuenta" 409 PATCH /api/usuarios/me '{"email":"lucia.gomez@mail.com"}'
 t "foto con URI del celular" 400 PATCH /api/usuarios/me '{"foto":"file:///var/mobile/perro.jpg"}'
