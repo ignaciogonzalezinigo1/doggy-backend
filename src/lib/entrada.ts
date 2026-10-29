@@ -8,7 +8,6 @@
  * en un `Resultado` que la ruta responde como 400.
  */
 
-import { CLAVES_FOTO_SEED, esValorDe } from '../dominio';
 import { conCampo, limpiarTexto, parsearSoloFecha, validarTelefono } from '../validaciones';
 import { esRutaUpload, existeUpload } from './fotos';
 import { aE164 } from './telefonos';
@@ -119,9 +118,9 @@ export function leerTextoOpcional(
 }
 
 /**
- * Lee una foto. Solo acepta una clave de las fotos del seed o la ruta de una
- * foto subida con POST /api/fotos ("/uploads/<nombre>.jpg") cuyo archivo
- * exista. Una URI del celular (file://, content://, blob:) se rechaza: es un
+ * Lee una foto. Solo acepta la ruta de una foto de la carpeta de uploads
+ * ("/uploads/<nombre>.jpg": subida con POST /api/fotos o copiada por el seed)
+ * cuyo archivo exista. Una URI del celular (file://, content://, blob:) se rechaza: es un
  * archivo temporal que nadie más puede ver.
  * @param valor lo que llegó
  * @param campo nombre del campo
@@ -130,7 +129,6 @@ export function leerTextoOpcional(
 export function leerFoto(valor: unknown, campo = 'Foto'): string | null {
   if (valor === undefined || valor === null || valor === '') return null;
   if (typeof valor !== 'string') throw new DatoInvalido(conCampo(campo, 'Tiene que ser un texto.'));
-  if (esValorDe(CLAVES_FOTO_SEED, valor)) return valor;
   if (!esRutaUpload(valor)) {
     throw new DatoInvalido(conCampo(campo, 'No tiene un formato válido.'));
   }

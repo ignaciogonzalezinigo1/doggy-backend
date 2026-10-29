@@ -456,6 +456,10 @@ t "sin archivo" 400 POST /api/fotos
 como ""
 t "la foto se ve sin token" 200 GET "$FOTO_A"
 t "foto que no existe" 404 GET "$RUTA_INEXISTENTE"
+# Las fotos de la demo salen del servidor: el seed las copia de prisma/fotos-seed/ a la carpeta de uploads.
+v "el seed copió las 8 fotos de la demo" 8 "$(find "$UPLOADS_DIR" -name 'seed-*.jpg' | wc -l | tr -d ' ')"
+t "una foto de la demo se ve sin token" 200 GET /uploads/seed-luna.jpg
+v "la base guarda la ruta de la demo" /uploads/seed-sofia.jpg "$(sql "select foto from Usuario where id = 1;")"
 como "$SOFIA"
 
 seccion "Usuario"
@@ -510,11 +514,14 @@ t "email de otra cuenta" 409 PATCH /api/usuarios/me '{"email":"lucia.gomez@mail.
 t "foto con URI del celular" 400 PATCH /api/usuarios/me '{"foto":"file:///var/mobile/perro.jpg"}'
 t "foto con ruta que no existe" 400 PATCH /api/usuarios/me "{\"foto\":\"$RUTA_INEXISTENTE\"}"
 t "foto con ruta fuera de /uploads/" 400 PATCH /api/usuarios/me '{"foto":"/uploads/../.env"}'
+t "foto con una clave vieja del seed" 400 PATCH /api/usuarios/me '{"foto":"sofia"}'
 t "foto subida" 200 PATCH /api/usuarios/me "{\"foto\":\"$FOTO_A\"}"
 v "guarda la ruta relativa" "$FOTO_A" "$(jget .foto)"
+v "se borró la foto de la demo que reemplazó (vuelve con db:reset)" no "$(hay_archivo /uploads/seed-sofia.jpg)"
 t "reemplaza la foto" 200 PATCH /api/usuarios/me "{\"foto\":\"$FOTO_B\"}"
 v "se borró el archivo viejo" no "$(hay_archivo "$FOTO_A")"
-t "vuelve a la foto del seed" 200 PATCH /api/usuarios/me '{"foto":"sofia"}'
+t "la foto de la demo borrada ya no se acepta" 400 PATCH /api/usuarios/me '{"foto":"/uploads/seed-sofia.jpg"}'
+t "saca la foto" 200 PATCH /api/usuarios/me '{"foto":null}'
 v "se borró la foto subida" no "$(hay_archivo "$FOTO_B")"
 
 seccion "Mascotas"

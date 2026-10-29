@@ -49,21 +49,6 @@ export const RADIOS_BUSQUEDA = [200, 500, 1000, 2000] as const;
 export const MAXIMO_ETIQUETAS = 5;
 
 /**
- * Claves de las fotos que vienen empaquetadas en la app para los datos de
- * ejemplo (`FOTOS_LOCALES` de doggy/mobile/src/data/fotos.ts).
- */
-export const CLAVES_FOTO_SEED = [
-  'luna',
-  'roco',
-  'milo',
-  'toby',
-  'pipa',
-  'sofia',
-  'julian',
-  'lucia',
-] as const;
-
-/**
  * Indica si un valor recibido pertenece a una de las listas de arriba.
  * @param lista valores válidos, por ejemplo `ESTADOS_REPORTE`
  * @param valor lo que llegó en el body (de tipo desconocido)
