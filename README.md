@@ -66,6 +66,15 @@ El seed (`prisma/seed.ts`) carga los datos de la demo; es la única fuente de es
 | Lucía Gómez | `lucia.gomez@mail.com` | Dueña de Toby (beagle). Generó el código `TOBY2026` para que Sofía lo acepte como invitada (roles dueño e invitado). En la demo en vivo escanea el QR de Luna |
 | Julián Fernández | `julian.fernandez@mail.com` | Vecino: dueño de Pipa (border collie), perdida en Caballito (el mapa no arranca vacío); paseador de Roco (invitado); ya escaneó el QR de Milo sin que estuviera perdido |
 
+**Demo completa.** Además de esos tres, el seed suma cuatro usuarios para que cada funcionalidad se pueda mostrar con solo iniciar sesión (`npm test` no los carga: pone `SEED_SOLO_BASE=1`):
+
+| Usuario | Email | Para qué sirve |
+| --- | --- | --- |
+| Diego Romero | `diego.romero@mail.com` | Co-dueño de Luna (Sofía no lo puede quitar: un dueño no quita a otro) y dueño de Coco, donde Sofía es invitada ("Dejar de cuidar a…", "Quitar", "Eliminar mascota") |
+| Martina Sosa | `martina.sosa@mail.com` | Dueña de Bruno, perdido y ya encontrado por Valentina: "¡Encontraron a Bruno!" y "Ya volvió a casa" |
+| Valentina Ruiz | `valentina.ruiz@mail.com` | Sin mascotas (estados vacíos); encontró a Bruno: pin verde de reencuentro y WhatsApp a Martina |
+| Tomás Acosta | `tomas.acosta@mail.com` | Cuenta vacía para aceptar `LUNA2026` (rol dueño). `MILO2025` ya está usado (410) |
+
 Además: 5 mascotas (Luna, Roco y Milo de Sofía; Toby de Lucía; Pipa de Julián), 13 registros de carnet (vacunas con refuerzo próximo y vencido, desparasitaciones y "Otro": análisis, consulta y castración), 6 turnos pasados y próximos, 6 asignaciones (cada dueño y Julián como paseador de Roco), el código `TOBY2026` sin usar y 2 reportes: el perdido de Pipa y el encontrado de Milo por QR (el caso "¿Se perdió…?"). El reencuentro no viene cargado: se muestra en vivo (Sofía reporta a Luna y Lucía escanea su QR). Todos los usuarios y mascotas tienen foto (créditos en `doggy/CREDITOS.md`). Las fechas se calculan desde hoy cada vez que corre el seed. Al terminar, el seed imprime en la consola qué mostrar con cada usuario.
 
 **Teléfono de Sofía para la demo.** Para que "Escribirle por WhatsApp" abra un celular real, poné el número en el `.env` (no se versiona) antes del `npm run db:reset`:

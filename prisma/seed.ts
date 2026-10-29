@@ -5,7 +5,9 @@
  * antes de cargar, así se puede correr más de una vez. Al terminar imprime un
  * resumen con cada usuario de la demo y qué conviene mostrar con él.
  *
- * Son tres usuarios, los justos para recorrer toda la app:
+ * Tiene dos capas:
+ *
+ * Base (la usan las pruebas, `npm test`): tres usuarios.
  * - Sofía (1), la usuaria principal: dueña de Luna, Roco y Milo, con carnet,
  *   turnos y fotos. Es la dueña en el flujo de perdidos.
  * - Lucía (20): dueña de Toby. Generó el código TOBY2026 para que Sofía lo
@@ -15,6 +17,20 @@
  *   vacío), paseador de Roco (invitado: Familia y Cuidadores con otra persona
  *   y "Quitar") y ya escaneó el QR de Milo sin que estuviera perdido (Sofía ve
  *   "¿Se perdió Milo?").
+ *
+ * Demo completa (se suma salvo que `SEED_SOLO_BASE=1`, que pone `npm test`):
+ * cada funcionalidad queda lista para mostrar con solo iniciar sesión.
+ * - Diego (2), co-dueño de Luna (una dueña no quita a otro dueño) y dueño de
+ *   Coco, donde Sofía es invitada ("Dejar de cuidar a…", sin "Asignar"; y
+ *   "Eliminar mascota" lista a Sofía entre quienes pierden el acceso).
+ * - Martina (5), dueña de Bruno: perdido y ya encontrado por Valentina, así
+ *   el reencuentro (pin verde, "¡Encontraron a Bruno!", "Ya volvió a casa")
+ *   se ve sin escanear nada.
+ * - Valentina (6), sin mascotas: encontró a Bruno (WhatsApp a Martina) y
+ *   muestra los estados vacíos.
+ * - Tomás (7), cuenta vacía para aceptar el código LUNA2026 (rol dueño).
+ * - Códigos: LUNA2026 (dueño, sin usar; Sofía recibe 409 porque ya es
+ *   dueña) y MILO2025 (ya usado: 410).
  *
  * - Teléfonos en E.164, celulares. El de Sofía sale de `TELEFONO_DEMO_SOFIA`
  *   del `.env` (5491…, sin + ni espacios), para mostrar WhatsApp con un número
@@ -50,6 +66,20 @@ const SOFIA_ID = 1;
 const JULIAN_ID = 4;
 /** Dueña de Toby: generó el código de asignación TOBY2026 para Sofía. */
 const LUCIA_ID = 20;
+/** Demo completa: co-dueño de Luna y dueño de Coco (Sofía es invitada). */
+const DIEGO_ID = 2;
+/** Demo completa: dueña de Bruno (perdido y ya encontrado). */
+const MARTINA_ID = 5;
+/** Demo completa: sin mascotas, encontró a Bruno. */
+const VALENTINA_ID = 6;
+/** Demo completa: cuenta vacía que acepta el código LUNA2026. */
+const TOMAS_ID = 7;
+
+/**
+ * Si es `1`, el seed carga solo la base (tres usuarios). Lo pone `npm test`,
+ * porque las pruebas cuentan filas exactas del seed base.
+ */
+const SOLO_BASE = process.env.SEED_SOLO_BASE === '1';
 
 /** Celular inventado de Sofía, si `TELEFONO_DEMO_SOFIA` está vacía. */
 const TELEFONO_SOFIA_INVENTADO = '+5491160685371';
@@ -322,6 +352,150 @@ const invitaciones = [
   },
 ];
 
+
+// --- Demo completa (no se carga con SEED_SOLO_BASE=1) ---
+
+/** Usuarios extra. Sin foto: la app muestra la inicial (se puede cargar una en vivo). */
+const usuariosExtra = [
+  {
+    id: DIEGO_ID,
+    nombre: 'Diego',
+    apellido: 'Romero',
+    email: 'diego.romero@mail.com',
+    ubicacion: 'Gurruchaga 1450, Palermo',
+    foto: null,
+    telefonoEmergencia: '+5491158312044',
+  },
+  {
+    id: MARTINA_ID,
+    nombre: 'Martina',
+    apellido: 'Sosa',
+    email: 'martina.sosa@mail.com',
+    ubicacion: 'Juramento 2100, Belgrano',
+    foto: null,
+    telefonoEmergencia: '+5491164417720',
+  },
+  {
+    id: VALENTINA_ID,
+    nombre: 'Valentina',
+    apellido: 'Ruiz',
+    email: 'valentina.ruiz@mail.com',
+    ubicacion: 'Cabildo 3200, Núñez',
+    foto: null,
+    telefonoEmergencia: '+5491139905512',
+  },
+  {
+    id: TOMAS_ID,
+    nombre: 'Tomás',
+    apellido: 'Acosta',
+    email: 'tomas.acosta@mail.com',
+    ubicacion: 'Thames 900, Villa Crespo',
+    foto: null,
+    telefonoEmergencia: '+5491147206631',
+  },
+];
+
+/** Mascotas extra (sin foto: la app muestra la huella). */
+const mascotasExtra = [
+  {
+    id: 6,
+    tutorId: MARTINA_ID,
+    nombre: 'Bruno',
+    raza: 'Labrador',
+    fechaNacimiento: dia('2022-07-30'),
+    codigo: 'DOGGY-6315-BRUNO',
+    senas: 'Labrador chocolate, con una mancha blanca en el pecho. Collar verde.',
+    foto: null,
+  },
+  {
+    id: 7,
+    tutorId: DIEGO_ID,
+    nombre: 'Coco',
+    raza: 'Caniche',
+    fechaNacimiento: dia('2024-02-11'),
+    codigo: 'DOGGY-9054-COCO',
+    senas: 'Blanco, pelo enrulado y corte de verano.',
+    foto: null,
+  },
+];
+
+const registrosExtra = [
+  { id: 14, mascotaId: 6, tipo: 'vacuna', nombre: 'Antirrábica', fecha: desdeHoy(-120), profesional: 'Veterinaria Belgrano', proximaDosis: desdeHoy(245) },
+  { id: 15, mascotaId: 7, tipo: 'vacuna', nombre: 'Séxtuple', fecha: desdeHoy(-300), profesional: 'Vet. San Roque', proximaDosis: desdeHoy(65) },
+];
+
+/** Turno de Coco: Sofía lo ve en su Agenda porque es invitada. */
+const turnosExtra = [
+  { id: 7, mascotaId: 7, categoria: 'peluqueria', fecha: enDias(5, 16), motivo: 'Corte de verano', lugar: 'Peluquería Canina Patitas, Palermo' },
+];
+
+/**
+ * Reencuentro ya armado: Bruno perdido (Martina) y encontrado por Valentina
+ * escaneando su chapita. En el mapa es un solo pin verde.
+ */
+const reportesExtra = [
+  {
+    id: 3,
+    mascotaId: 6,
+    autorId: MARTINA_ID,
+    estado: 'perdido',
+    nombre: 'Bruno',
+    raza: 'Labrador',
+    descripcion: 'Labrador chocolate, con una mancha blanca en el pecho. Collar verde.',
+    foto: null,
+    etiquetas: ['Collar verde'],
+    lat: -34.5617,
+    lng: -58.4563,
+    zona: 'Belgrano, CABA',
+    fecha: haceHoras(26),
+    radioMetros: 500,
+    infoAdicional: 'Se escapó por el portón. Responde a su nombre y es muy amigable.',
+  },
+  {
+    id: 4,
+    mascotaId: 6,
+    autorId: VALENTINA_ID,
+    estado: 'encontrado',
+    nombre: 'Bruno',
+    raza: 'Labrador',
+    descripcion: 'Labrador chocolate, con una mancha blanca en el pecho. Collar verde.',
+    foto: null,
+    etiquetas: [],
+    lat: -34.5486,
+    lng: -58.4631,
+    zona: 'Núñez, CABA',
+    fecha: haceHoras(2),
+    infoAdicional: 'Estaba en la plaza de Cabildo y Congreso. Lo tengo en casa, está bien.',
+  },
+];
+
+const cuidadoresExtra = [
+  // Diego co-dueño de Luna: Sofía no ve "Quitar" en su fila (un dueño no quita a otro).
+  { id: 7, mascotaId: 1, usuarioId: DIEGO_ID, rol: 'dueno', detalle: 'Co-tutor', tipo: 'familia' },
+  { id: 8, mascotaId: 6, usuarioId: MARTINA_ID, rol: 'dueno', detalle: 'Tutora', tipo: 'familia' },
+  { id: 9, mascotaId: 7, usuarioId: DIEGO_ID, rol: 'dueno', detalle: 'Tutor', tipo: 'familia' },
+  // Sofía invitada de Coco: "Dejar de cuidar a Coco" y sin "+ Asignar a…".
+  { id: 10, mascotaId: 7, usuarioId: SOFIA_ID, rol: 'invitado', detalle: 'Lo cuida los fines de semana', tipo: 'familia' },
+];
+
+const invitacionesExtra = [
+  // Rol dueño, sin usar: Tomás la acepta; Sofía recibe 409 (ya es dueña de Luna).
+  { token: 'LUNA2026', mascotaId: 1, rol: 'dueno', creadaPorId: SOFIA_ID, usada: false },
+  // Ya usado: 410 "ya se usó".
+  { token: 'MILO2025', mascotaId: 3, rol: 'invitado', creadaPorId: SOFIA_ID, usada: true },
+];
+
+/** Datos que se cargan: la base y, salvo `SEED_SOLO_BASE=1`, la demo completa. */
+const datos = {
+  usuarios: SOLO_BASE ? usuarios : [...usuarios, ...usuariosExtra],
+  mascotas: SOLO_BASE ? mascotas : [...mascotas, ...mascotasExtra],
+  registros: SOLO_BASE ? registros : [...registros, ...registrosExtra],
+  turnos: SOLO_BASE ? turnos : [...turnos, ...turnosExtra],
+  reportes: SOLO_BASE ? reportes : [...reportes, ...reportesExtra],
+  cuidadores: SOLO_BASE ? cuidadores : [...cuidadores, ...cuidadoresExtra],
+  invitaciones: SOLO_BASE ? invitaciones : [...invitaciones, ...invitacionesExtra],
+};
+
 /** Qué mostrar con cada usuario en la demo (se imprime al final del seed). */
 const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   {
@@ -341,16 +515,42 @@ const GUIA_DEMO: { email: string; quien: string; mostrar: string }[] = [
   },
 ];
 
+/** Guía de los usuarios de la demo completa. */
+const GUIA_EXTRA: { email: string; quien: string; mostrar: string }[] = [
+  {
+    email: 'diego.romero@mail.com',
+    quien: 'Diego, co-dueño de Luna y dueño de Coco (Sofía es invitada)',
+    mostrar: 'Quitar a Sofía de Coco; "Eliminar mascota" con Coco (lista a Sofía).',
+  },
+  {
+    email: 'martina.sosa@mail.com',
+    quien: 'Martina, dueña de Bruno (perdido y ya encontrado)',
+    mostrar: '"¡Encontraron a Bruno!" con WhatsApp a Valentina y "Ya volvió a casa".',
+  },
+  {
+    email: 'valentina.ruiz@mail.com',
+    quien: 'Valentina, sin mascotas, encontró a Bruno',
+    mostrar: 'Pin verde de reencuentro con WhatsApp a Martina; estados vacíos.',
+  },
+  {
+    email: 'tomas.acosta@mail.com',
+    quien: 'Tomás, cuenta vacía',
+    mostrar: 'Aceptar el código LUNA2026 (queda como dueño de Luna). MILO2025 ya está usado (410).',
+  },
+];
+
 /** Imprime el resumen para la demo. */
 function imprimirResumen(): void {
+  const { usuarios, mascotas, registros, turnos, reportes } = datos;
   const perdidos = reportes.filter((r) => r.estado === 'perdido').length;
   console.log(
-    `Seed listo: ${usuarios.length} usuarios, ${mascotas.length} mascotas, ${registros.length} registros, ` +
-      `${turnos.length} turnos y ${reportes.length} reportes (${perdidos} perdidos, ${reportes.length - perdidos} encontrados).`,
+    `Seed listo${SOLO_BASE ? ' (solo base)' : ' (demo completa)'}: ${usuarios.length} usuarios, ${mascotas.length} mascotas, ` +
+      `${registros.length} registros, ${turnos.length} turnos y ${reportes.length} reportes ` +
+      `(${perdidos} perdidos, ${reportes.length - perdidos} encontrados).`,
   );
   console.log(`Contraseña de todos: ${PASSWORD_DEMO}\n`);
   console.log('Usuarios para la demo:');
-  for (const { email, quien, mostrar } of GUIA_DEMO) {
+  for (const { email, quien, mostrar } of SOLO_BASE ? GUIA_DEMO : [...GUIA_DEMO, ...GUIA_EXTRA]) {
     console.log(`- ${email}\n  ${quien}\n  ${mostrar}`);
   }
 }
@@ -362,7 +562,7 @@ function imprimirResumen(): void {
 async function sembrar(): Promise<void> {
   // Cada usuario con su propio salt, como quedaría al registrarse.
   const usuariosConPassword = await Promise.all(
-    usuarios.map(async (usuario) => ({
+    datos.usuarios.map(async (usuario) => ({
       ...usuario,
       passwordHash: await bcrypt.hash(PASSWORD_DEMO, RONDAS_BCRYPT),
     })),
@@ -381,13 +581,13 @@ async function sembrar(): Promise<void> {
     await tx.usuario.deleteMany();
 
     await tx.usuario.createMany({ data: usuariosConPassword });
-    await tx.mascota.createMany({ data: mascotas });
-    await tx.registroSanitario.createMany({ data: registros });
-    await tx.turno.createMany({ data: turnos });
-    await tx.cuidador.createMany({ data: cuidadores });
-    await tx.invitacion.createMany({ data: invitaciones });
+    await tx.mascota.createMany({ data: datos.mascotas });
+    await tx.registroSanitario.createMany({ data: datos.registros });
+    await tx.turno.createMany({ data: datos.turnos });
+    await tx.cuidador.createMany({ data: datos.cuidadores });
+    await tx.invitacion.createMany({ data: datos.invitaciones });
 
-    for (const { etiquetas, ...reporte } of reportes) {
+    for (const { etiquetas, ...reporte } of datos.reportes) {
       await tx.reportePerdida.create({
         data: { ...reporte, etiquetas: { create: etiquetas.map((texto) => ({ texto })) } },
       });

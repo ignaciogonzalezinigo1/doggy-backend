@@ -65,6 +65,8 @@ DB="$RAIZ/test.db"
 export DATABASE_URL="file:./test.db"
 # El seed usa un teléfono inventado para Sofía, aunque el .env tenga el real de la demo.
 export TELEFONO_DEMO_SOFIA=""
+# Solo el seed base: las pruebas cuentan filas exactas y registran sus propios actores.
+export SEED_SOLO_BASE=1
 
 if curl -s -o /dev/null "$API/api/health"; then
   abortar "ya hay algo escuchando en el puerto $PUERTO. Bajalo y volvé a correr las pruebas."
