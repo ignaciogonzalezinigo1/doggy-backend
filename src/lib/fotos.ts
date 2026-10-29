@@ -4,7 +4,9 @@
  * Los archivos van a la carpeta `uploads/` (o la que diga `UPLOADS_DIR`, que
  * usan las pruebas) y se sirven públicos en `/uploads`. En la base se guarda
  * solo la ruta relativa ("/uploads/abc.jpg"), nunca la URL completa: la IP de
- * la PC cambia y la app arma la URL con su `API_URL`.
+ * la PC cambia y la app arma la URL con su `API_URL`. Las fotos de la demo
+ * también viven acá: el seed las copia desde prisma/fotos-seed/ como
+ * "seed-<clave>.jpg".
  */
 
 import { randomBytes } from 'node:crypto';
@@ -25,8 +27,12 @@ export const PESO_MAXIMO_FOTO = 5 * 1024 * 1024;
 /** Largo en bytes del nombre aleatorio (32 caracteres hex). */
 const BYTES_NOMBRE = 16;
 
-/** Ruta de una foto subida: nombre aleatorio de 32 hex y una de las extensiones aceptadas. */
-const PATRON_RUTA_UPLOAD = /^\/uploads\/[0-9a-f]{32}\.(jpg|png|webp)$/;
+/**
+ * Ruta de una foto de la carpeta de uploads: una subida (nombre aleatorio de
+ * 32 hex) o una de la demo que copia el seed ("seed-luna.jpg"), con una de las
+ * extensiones aceptadas.
+ */
+const PATRON_RUTA_UPLOAD = /^\/uploads\/(?:[0-9a-f]{32}|seed-[a-z]+)\.(jpg|png|webp)$/;
 
 /** Extensión con la que se guarda cada formato aceptado. */
 export type ExtensionFoto = 'jpg' | 'png' | 'webp';
@@ -63,7 +69,7 @@ export async function guardarFoto(datos: Buffer, extension: ExtensionFoto): Prom
 /**
  * Indica si un valor tiene la forma de una ruta de foto subida.
  * @param foto valor guardado o recibido
- * @returns true si es "/uploads/<32 hex>.<jpg|png|webp>"
+ * @returns true si es "/uploads/<32 hex o seed-clave>.<jpg|png|webp>"
  */
 export function esRutaUpload(foto: string | null | undefined): foto is string {
   return typeof foto === 'string' && PATRON_RUTA_UPLOAD.test(foto);

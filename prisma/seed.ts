@@ -35,9 +35,12 @@
  * - Teléfonos en E.164, celulares. El de Sofía sale de `TELEFONO_DEMO_SOFIA`
  *   del `.env` (5491…, sin + ni espacios), para mostrar WhatsApp con un número
  *   real sin escribirlo en el repo; si está vacía, va uno inventado.
- * - Las fotos son claves de imágenes que vienen en la app
- *   (doggy/mobile/assets/images, ver `FOTOS_LOCALES` en src/data/fotos.ts y
- *   los créditos en doggy/CREDITOS.md).
+ * - Las fotos están versionadas en prisma/fotos-seed/ (créditos en
+ *   CREDITOS.md). Antes de cargar los datos, el seed las copia a la carpeta de
+ *   uploads como `seed-<clave>.jpg`, pisando la copia anterior, y guarda la
+ *   ruta "/uploads/seed-<clave>.jpg": la app las pide al servidor como
+ *   cualquier foto subida. El nombre es fijo para que los `db:reset` no
+ *   acumulen copias y para recrear la que `borrarFotoSiHuerfana` haya borrado.
  * - Las fechas se calculan desde hoy, así nunca quedan viejas: los reportes
  *   dicen "hace 2 h", la Agenda tiene turnos pasados y próximos, y el carnet
  *   tiene refuerzos próximos y vencidos. Las fechas de nacimiento son fijas.
@@ -48,6 +51,10 @@
  */
 
 import bcrypt from 'bcryptjs';
+import { copyFile, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CARPETA_UPLOADS, PREFIJO_UPLOADS } from '../src/lib/fotos';
 import { prisma } from '../src/lib/prisma';
 import { interpretarTelefono } from '../src/lib/telefonos';
 
@@ -80,6 +87,47 @@ const TOMAS_ID = 7;
  * porque las pruebas cuentan filas exactas del seed base.
  */
 const SOLO_BASE = process.env.SEED_SOLO_BASE === '1';
+
+/** Carpeta versionada con las fotos de la demo (prisma/fotos-seed/). */
+const CARPETA_FOTOS_SEED = fileURLToPath(new URL('fotos-seed/', import.meta.url));
+
+/** Fotos de la demo: cada clave es un archivo `<clave>.jpg` de prisma/fotos-seed/. */
+const FOTOS_SEED = ['luna', 'roco', 'milo', 'toby', 'pipa', 'sofia', 'julian', 'lucia'] as const;
+type ClaveFotoSeed = (typeof FOTOS_SEED)[number];
+
+/**
+ * Nombre con el que queda una foto de la demo en la carpeta de uploads.
+ * @param clave foto de la demo
+ * @returns "seed-<clave>.jpg"
+ */
+function nombreFotoSeed(clave: ClaveFotoSeed): string {
+  return `seed-${clave}.jpg`;
+}
+
+/**
+ * Ruta que se guarda en la base para una foto de la demo.
+ * @param clave foto de la demo
+ * @returns "/uploads/seed-<clave>.jpg"
+ */
+function fotoSeed(clave: ClaveFotoSeed): string {
+  return `${PREFIJO_UPLOADS}${nombreFotoSeed(clave)}`;
+}
+
+/**
+ * Copia las fotos de la demo a la carpeta de uploads (la de `UPLOADS_DIR`,
+ * si está definida, como en `npm test`). Pisa las copias anteriores, así
+ * correr el seed muchas veces deja siempre los mismos archivos y vuelve a
+ * crear los que se hayan borrado al reemplazar una foto.
+ * @returns una promesa que termina cuando están todas copiadas
+ */
+async function copiarFotosSeed(): Promise<void> {
+  await mkdir(CARPETA_UPLOADS, { recursive: true });
+  await Promise.all(
+    FOTOS_SEED.map((clave) =>
+      copyFile(path.join(CARPETA_FOTOS_SEED, `${clave}.jpg`), path.join(CARPETA_UPLOADS, nombreFotoSeed(clave))),
+    ),
+  );
+}
 
 /** Celular inventado de Sofía, si `TELEFONO_DEMO_SOFIA` está vacía. */
 const TELEFONO_SOFIA_INVENTADO = '+5491160685371';
@@ -160,7 +208,7 @@ const usuarios = [
     apellido: 'Romero',
     email: 'sofia.romero@mail.com',
     ubicacion: 'Gurruchaga 1450, Palermo',
-    foto: 'sofia',
+    foto: fotoSeed('sofia'),
     telefonoEmergencia: telefonoSofia(),
   },
   {
@@ -169,7 +217,7 @@ const usuarios = [
     apellido: 'Fernández',
     email: 'julian.fernandez@mail.com',
     ubicacion: 'Díaz Vélez 4300, Almagro',
-    foto: 'julian',
+    foto: fotoSeed('julian'),
     telefonoEmergencia: '+5491157698999',
   },
   {
@@ -178,7 +226,7 @@ const usuarios = [
     apellido: 'Gómez',
     email: 'lucia.gomez@mail.com',
     ubicacion: 'Rojas 120, Caballito',
-    foto: 'lucia',
+    foto: fotoSeed('lucia'),
     telefonoEmergencia: '+5491163229096',
   },
 ];
@@ -193,7 +241,7 @@ const mascotas = [
     fechaNacimiento: dia('2023-03-14'),
     codigo: 'DOGGY-8492-LUNA',
     senas: 'Pelo dorado claro y orejas más oscuras. Collar rojo con chapita.',
-    foto: 'luna',
+    foto: fotoSeed('luna'),
   },
   {
     id: 2,
@@ -203,7 +251,7 @@ const mascotas = [
     fechaNacimiento: dia('2025-04-02'),
     codigo: 'DOGGY-3127-ROCO',
     senas: 'Blanco con manchas negras en la cara y las orejas paradas.',
-    foto: 'roco',
+    foto: fotoSeed('roco'),
   },
   {
     id: 3,
@@ -213,7 +261,7 @@ const mascotas = [
     fechaNacimiento: dia('2021-06-20'),
     codigo: 'DOGGY-5610-MILO',
     senas: 'Marrón con el pecho y las patas blancas. Orejas caídas.',
-    foto: 'milo',
+    foto: fotoSeed('milo'),
   },
   // Mascota de otra usuaria (Lucía): Sofía no la ve hasta aceptar el código de asignación.
   {
@@ -224,7 +272,7 @@ const mascotas = [
     fechaNacimiento: dia('2022-01-08'),
     codigo: 'DOGGY-7741-TOBY',
     senas: 'Tricolor, con la punta de la cola blanca.',
-    foto: 'toby',
+    foto: fotoSeed('toby'),
   },
   // De Julián, perdida sin encontrar: así el mapa no arranca vacío.
   {
@@ -235,7 +283,7 @@ const mascotas = [
     fechaNacimiento: dia('2020-09-05'),
     codigo: 'DOGGY-2468-PIPA',
     senas: 'Negra y blanca, con la cara partida en dos colores. Collar azul con chapita.',
-    foto: 'pipa',
+    foto: fotoSeed('pipa'),
   },
 ];
 
@@ -292,7 +340,7 @@ const reportes = [
     nombre: 'Pipa',
     raza: 'Border Collie',
     descripcion: 'Negra y blanca, con la cara partida en dos colores. Collar azul con chapita.',
-    foto: 'pipa',
+    foto: fotoSeed('pipa'),
     etiquetas: ['Collar azul'],
     lat: -34.6067,
     lng: -58.4352,
@@ -310,7 +358,7 @@ const reportes = [
     nombre: 'Milo',
     raza: 'Mestizo',
     descripcion: 'Marrón con el pecho y las patas blancas. Orejas caídas.',
-    foto: 'milo',
+    foto: fotoSeed('milo'),
     etiquetas: [],
     lat: -34.5994,
     lng: -58.4397,
@@ -556,10 +604,14 @@ function imprimirResumen(): void {
 }
 
 /**
- * Borra todos los datos y carga los de ejemplo, en una sola transacción.
+ * Copia las fotos de la demo, borra todos los datos y carga los de ejemplo,
+ * en una sola transacción.
  * @returns una promesa que termina cuando se cargó todo
  */
 async function sembrar(): Promise<void> {
+  // Antes que los datos: las filas apuntan a estos archivos.
+  await copiarFotosSeed();
+
   // Cada usuario con su propio salt, como quedaría al registrarse.
   const usuariosConPassword = await Promise.all(
     datos.usuarios.map(async (usuario) => ({
